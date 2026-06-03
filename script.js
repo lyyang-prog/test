@@ -1,15 +1,14 @@
-// --- 遊戲設定與變數 ---
+/// --- 遊戲設定與變數 ---
 const modelURL = 'https://teachablemachine.withgoogle.com/models/_qNCgNZbP/';
+let model, maxPredictions;
 let video;
-let classifier;
-let label = "模型載入中...";
+let label = "等待點擊啟動...";
 let confidence = 0.0;
 let score = 0;
 let feedbackText = "點擊畫面任意處以啟動鏡頭與 AI 🚀";
-let isGameStarted = false; // iPad iOS 觸發鎖
+let isGameStarted = false; 
 let hasScoredThisTime = false; 
 
-// 運動激勵語錄
 const motivationalQuotes = [
     "加油！把手高高舉起！ 🙌",
     "再伸展多一點，你可以的！ 🔥",
@@ -18,20 +17,25 @@ const motivationalQuotes = [
     "堅持住！下一分馬上就到！ 🚀"
 ];
 
-function preload() {
-    // 載入 Teachable Machine 模型
-    classifier = ml5.imageClassifier(modelURL + 'model.json');
+// 替代原本的 preload，改用非同步載入確保安全
+async function loadModel() {
+    const checkpointURL = modelURL + "model.json";
+    const metadataURL = modelURL + "metadata.json";
+    model = await tmImage.load(checkpointURL, metadataURL);
+    maxPredictions = model.getTotalClasses();
+    label = "AI 已就緒！";
+    feedbackText = "AI 載入成功！請開始挑戰！ 🙌";
+    loop(); // 重新啟動 p5 的 draw 循環
 }
 
 function setup() {
-    // 配合 iPad 螢幕比例 (4:3)
     let canvasWidth = windowWidth > 640 ? 640 : windowWidth - 20;
     let canvasHeight = canvasWidth * (3 / 4);
     
     let canvas = createCanvas(canvasWidth, canvasHeight);
     canvas.parent('canvas-container');
 
-    // 初始化鏡頭（先不開啟，等待點擊）
+    // iPad 前鏡頭設定
     let constraints = {
         video: {
             facingMode: 'user',
@@ -43,55 +47,69 @@ function setup() {
     video = createCapture(constraints);
     video.size(canvasWidth, canvasHeight);
     video.hide(); 
+    
+    noLoop(); // 先暫停繪製，直到點擊啟動
 }
 
-// 關鍵優化：解決 iPad Safari 限制，必須由使用者點擊畫面才能順利啟動相機
+// 點擊畫面激活 iPad 鏡頭與 AI 模型
 function mousePressed() {
     if (!isGameStarted) {
         isGameStarted = true;
-        feedbackText = "AI 初始化中，請稍候...";
-        classifyVideo();
+        feedbackText = "模型與鏡頭初始化中...";
+        
+        // 啟動鏡頭視訊流（iOS 必須由事件觸發）
+        if (video.elt && video.elt.srcObject) {
+            video.elt.play();
+        }
+        
+        loadModel().then(() => {
+            predictVideo();
+        });
     }
 }
 
-function classifyVideo() {
-    if (isGameStarted) {
-        classifier.classify(video, gotResult);
-    }
-}
-
-function gotResult(error, results) {
-    if (error) {
-        console.error(error);
-        return;
-    }
-    
-    label = results[0].label;
-    confidence = results[0].confidence;
-
-    // 核心邏輯：判斷 handup 達 80% (0.8) 則加分
-    if (label === "handup" && confidence >= 0.8) {
-        if (!hasScoredThisTime) {
-            score++;
-            feedbackText = "🎯 太棒了！得分！ 🎯";
-            hasScoredThisTime = true; 
+async function predictVideo() {
+    if (isGameStarted && model) {
+        // 預測鏡頭畫面
+        const prediction = await model.predict(video.elt);
+        
+        // 找出機率最高的動作
+        let highestIndex = 0;
+        let highestValue = 0;
+        for (let i = 0; i < maxPredictions; i++) {
+            if (prediction[i].probability > highestValue) {
+                highestValue = prediction[i].probability;
+                highestIndex = i;
+            }
         }
-    } else if (label === "handdown") {
-        if (hasScoredThisTime) {
-            hasScoredThisTime = false;
-            let randomIndex = floor(random(motivationalQuotes.length));
-            feedbackText = motivationalQuotes[randomIndex];
-        }
-    }
+        
+        label = prediction[highestIndex].className;
+        confidence = prediction[highestIndex].probability;
 
-    classifyVideo();
+        // 核心遊戲邏輯
+        if (label === "handup" && confidence >= 0.8) {
+            if (!hasScoredThisTime) {
+                score++;
+                feedbackText = "🎯 太棒了！得分！ 🎯";
+                hasScoredThisTime = true; 
+            }
+        } else if (label === "handdown") {
+            if (hasScoredThisTime) {
+                hasScoredThisTime = false;
+                let randomIndex = floor(random(motivationalQuotes.length));
+                feedbackText = motivationalQuotes[randomIndex];
+            }
+        }
+        
+        // 持續預測
+        window.requestAnimationFrame(predictVideo);
+    }
 }
 
 function draw() {
     background(15, 23, 42);
 
     if (isGameStarted) {
-        // 鏡像翻轉顯示相機畫面
         push();
         translate(width, 0);
         scale(-1, 1);
@@ -99,23 +117,21 @@ function draw() {
         pop();
     }
 
-    // 科技感半透明遮罩
     fill(15, 23, 42, 130);
     rect(0, 0, width, height);
 
-    // 頂部狀態列
+    // 頂部 UI
     fill(30, 41, 59, 200);
     noStroke();
     rect(0, 0, width, 70);
 
-    // 分數顯示
     fill('#f43f5e'); 
     textSize(36);
     textAlign(LEFT, CENTER);
     textStyle(BOLD);
     text("SCORE: " + score, 20, 35);
 
-    // 信心值進度條
+    // 進度條
     let barWidth = 150;
     let fillWidth = barWidth * confidence;
     
@@ -125,4 +141,37 @@ function draw() {
     rect(width - barWidth - 20, 25, barWidth, 20, 5);
     
     noStroke();
-    if
+    if (isGameStarted && label === "handup" && confidence >= 0.8) {
+        fill('#22c55e'); 
+    } else {
+        fill('#38bdf8'); 
+    }
+    rect(width - barWidth - 20, 25, fillWidth, 20, 5);
+
+    fill(255);
+    textSize(14);
+    textAlign(RIGHT, CENTER);
+    textStyle(NORMAL);
+    let displayLabel = isGameStarted ? label.toUpperCase() : "WAITING";
+    text(`${displayLabel} (${(confidence * 100).toFixed(0)}%)`, width - 20, 55);
+
+    // 底部文字欄
+    fill(30, 41, 59, 220);
+    rect(0, height - 70, width, 70);
+
+    if (isGameStarted && label === "handup" && confidence >= 0.8) {
+        fill('#4ade80'); 
+    } else {
+        fill('#e2e8f0'); 
+    }
+    textSize(18);
+    textAlign(CENTER, CENTER);
+    textStyle(BOLD);
+    text(feedbackText, width / 2, height - 35);
+}
+
+function windowResized() {
+    let canvasWidth = windowWidth > 640 ? 640 : windowWidth - 20;
+    let canvasHeight = canvasWidth * (3 / 4);
+    resizeCanvas(canvasWidth, canvasHeight);
+}
