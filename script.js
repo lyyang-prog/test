@@ -3,40 +3,48 @@ const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/";
 
 let model, webcam, ctx, maxPredictions;
 let score = 0;
+let lastStatus = "down"; // 狀態鎖：防止單次動作連續重複加分
 
-// 無限集氣專用計時器
-let scoreTimer = null; 
-let isHandUpNow = false; 
+// 運動激勵語錄庫
+const motivationalQuotes = [
+    "加油！把手高高舉起！ 🙌",
+    "再伸展多一點，你可以的！ 🔥",
+    "運動讓大腦更清醒，繼續衝！ ⚡",
+    "手舉得越高，能量就滿滿！ 💪",
+    "堅持住！下一分馬上就到！ 🚀"
+];
 
 async function init() {
     const statusDiv = document.getElementById("status");
-    statusDiv.innerText = "正在啟動攝像頭...";
+    statusDiv.innerText = "正在啟動 iPad 攝像頭...";
 
     const modelURL = URL + "model.json";
     const metadataURL = URL + "metadata.json";
 
     try {
-        // 2. ⚠️ 完全復原：一模一樣用你最初能成功開啟 iPad 相機的寫法
         const size = 400;
-        const flip = true; 
+        const flip = true; // 鏡像翻轉
+        
+        // 使用驗證成功、相容 iPad 的 tmPose 視訊模組
         webcam = new tmPose.Webcam(size, size, flip); 
         
-        await webcam.setup(); 
+        await webcam.setup(); // 請求相機權限
         await webcam.play();
         
-        statusDiv.innerText = "相機已就緒，正在加載模型...";
+        statusDiv.innerText = "相機就緒，正在加載 AI 模型...";
 
-        // 加載 AI 模型
+        // 載入模型
         model = await tmPose.load(modelURL, metadataURL);
         maxPredictions = model.getTotalClasses();
 
-        // 設定畫布
+        // 設定 Canvas
         const canvas = document.getElementById("canvas");
         canvas.width = size;
         canvas.height = size;
         ctx = canvas.getContext("2d");
 
-        statusDiv.innerText = "偵測中... 請開始動作！";
+        statusDiv.innerText = "偵測中... 請開始運動！";
+        document.getElementById("label-container").innerText = "把手舉高，開始集氣！🔥";
         window.requestAnimationFrame(loop);
     } catch (e) {
         console.error(e);
@@ -45,22 +53,24 @@ async function init() {
 }
 
 async function loop(timestamp) {
-    webcam.update(); // 更新相機畫面
-    await predict();
+    if (webcam) {
+        webcam.update(); // 實時更新視訊畫面
+        await predict();
+    }
     window.requestAnimationFrame(loop);
 }
 
 async function predict() {
-    // 執行預測
+    // 透過 Pose 模型進行姿勢估算與預測
     const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
     const prediction = await model.predict(posenetOutput);
 
-    // 繪製骨架點
+    // 繪製玩家畫面與彩色骨架點
     if (pose) {
         drawPose(pose);
     }
 
-    // 抓取 handup 和 handdown 的即時機率
+    // 動態標籤搜尋
     let handupProbability = 0;
     let handdownProbability = 0;
 
@@ -72,40 +82,28 @@ async function predict() {
         }
     }
 
-    // 📊 滿足要求：在下方即時顯示百分比，讓用戶知道差多少
     const labelContainer = document.getElementById("label-container");
-    let upPercent = (handupProbability * 100).toFixed(0);
-    let downPercent = (handdownProbability * 100).toFixed(0);
-    labelContainer.innerHTML = `🙌 舉手: ${upPercent}% (目標70%) | 👇 放下: ${downPercent}%`;
 
-    // 🚀 滿足要求：只要超過 70% 就能無上限、連續跳分
-    if (handupProbability >= 0.70) {
-        if (!isHandUpNow) {
-            isHandUpNow = true;
-            score++;
-            document.getElementById("score-display").innerText = "分數：" + score;
-            
-            // 每 0.5 秒直接加 1 分，手不放下就不會停止，沒有上限
-            scoreTimer = setInterval(() => {
-                score++;
-                document.getElementById("score-display").innerText = "分數：" + score;
-            }, 500); 
-        }
-    } else {
-        // 如果舉手跌破 70%，立刻停止加分
-        if (isHandUpNow) {
-            isHandUpNow = false;
-            if (scoreTimer) {
-                clearInterval(scoreTimer);
-                scoreTimer = null;
-            }
-        }
+    // --- 核心遊戲得分判斷（已修正為 70% 門檻） ---
+    // 當偵測到 handup 機率大於等於 70% (0.70) 且上次狀態是放下的
+    if (handupProbability >= 0.70 && lastStatus === "down") {
+        score++;
+        lastStatus = "up";
+        document.getElementById("score-display").innerText = score;
+        labelContainer.innerHTML = "🎯 太棒了！得分！ 🎯";
+    } 
+    // 當 handdown 機率大於 70% (0.70) 時，重置狀態鎖，並更換加油語錄
+    else if (handdownProbability > 0.70 && lastStatus === "up") {
+        lastStatus = "down";
+        let randomIndex = Math.floor(Math.random() * motivationalQuotes.length);
+        labelContainer.innerHTML = motivationalQuotes[randomIndex];
     }
 }
 
 function drawPose(pose) {
     if (webcam.canvas) {
         ctx.drawImage(webcam.canvas, 0, 0);
+        // 繪製骨架節點
         if (pose) {
             const minPartConfidence = 0.5;
             tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
