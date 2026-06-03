@@ -6,7 +6,8 @@
     <title>AI 活力集氣挑戰賽</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ml5@0.12.2/dist/ml5.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
     
     <style>
         body {
@@ -37,8 +38,7 @@
 
     <script>
     const modelURL = 'https://teachablemachine.withgoogle.com/models/_qNCgNZbP/';
-    let video;
-    let classifier;
+    let model, video, maxPredictions;
     let label = "等待啟動";
     let confidence = 0.0;
     let score = 0;
@@ -54,19 +54,32 @@
         "堅持住！下一分馬上就到！ 🚀"
     ];
 
-    function preload() {
-        // 載入模型
-        classifier = ml5.imageClassifier(modelURL + 'model.json');
+    // 非同步載入谷歌官方模型
+    async function initAI() {
+        try {
+            const checkpointURL = modelURL + "model.json";
+            const metadataURL = modelURL + "metadata.json";
+            
+            feedbackText = "正在下載 AI 模型... ⏳";
+            model = await tmImage.load(checkpointURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+            
+            feedbackText = "AI 載入成功！開始分析鏡頭... ✨";
+            predictLoop(); // 進入循環預測
+        } catch (err) {
+            console.error(err);
+            feedbackText = "模型載入出錯，請檢查網址或網路！";
+        }
     }
 
     function setup() {
-        // 強制設定寬高，不讓它縮成一個點
         let canvasWidth = windowWidth > 640 ? 640 : windowWidth - 20;
         let canvasHeight = canvasWidth * (3 / 4);
         
         let canvas = createCanvas(canvasWidth, canvasHeight);
         canvas.parent('canvas-container');
 
+        // iPad 鏡頭規格優化
         let constraints = {
             video: {
                 facingMode: 'user',
@@ -76,121 +89,41 @@
             audio: false
         };
         
-        video = createCapture(constraints, function(stream) {
-            console.log("鏡頭建立成功");
-        });
+        video = createCapture(constraints);
         video.size(canvasWidth, canvasHeight);
         video.hide(); 
     }
 
+    // 點擊畫面時，觸發 iPad 的硬體鏡頭播放與 AI 載入
     function mousePressed() {
         if (!isGameStarted) {
             isGameStarted = true;
-            feedbackText = "AI 正在分析畫面中...";
-            classifyVideo();
-        }
-    }
-
-    function classifyVideo() {
-        if (isGameStarted) {
-            classifier.classify(video, gotResult);
-        }
-    }
-
-    function gotResult(error, results) {
-        if (error) {
-            console.error(error);
-            return;
-        }
-        
-        label = results[0].label;
-        confidence = results[0].confidence;
-
-        if (label === "handup" && confidence >= 0.8) {
-            if (!hasScoredThisTime) {
-                score++;
-                feedbackText = "🎯 太棒了！得分！ 🎯";
-                hasScoredThisTime = true; 
+            feedbackText = "初始化相機中...";
+            
+            // 強制啟動視訊流（修復 iOS 暫停限制）
+            if (video.elt) {
+                video.elt.play();
             }
-        } else if (label === "handdown") {
-            if (hasScoredThisTime) {
-                hasScoredThisTime = false;
-                let randomIndex = floor(random(motivationalQuotes.length));
-                feedbackText = motivationalQuotes[randomIndex];
-            }
+            
+            initAI();
         }
-
-        classifyVideo();
     }
 
-    function draw() {
-        background(15, 23, 42);
-
-        if (isGameStarted) {
-            push();
-            translate(width, 0);
-            scale(-1, 1);
-            image(video, 0, 0, width, height);
-            pop();
-        }
-
-        fill(15, 23, 42, 140);
-        rect(0, 0, width, height);
-
-        // 頂部 UI
-        fill(30, 41, 59, 220);
-        noStroke();
-        rect(0, 0, width, 70);
-
-        fill('#f43f5e'); 
-        textSize(32);
-        textAlign(LEFT, CENTER);
-        textStyle(BOLD);
-        text("SCORE: " + score, 20, 35);
-
-        let barWidth = 140;
-        let fillWidth = barWidth * confidence;
-        
-        noFill();
-        stroke('#38bdf8');
-        strokeWeight(2);
-        rect(width - barWidth - 20, 25, barWidth, 20, 5);
-        
-        noStroke();
-        if (isGameStarted && label === "handup" && confidence >= 0.8) {
-            fill('#22c55e'); 
-        } else {
-            fill('#38bdf8'); 
-        }
-        rect(width - barWidth - 20, 25, fillWidth, 20, 5);
-
-        fill(255);
-        textSize(12);
-        textAlign(RIGHT, CENTER);
-        textStyle(NORMAL);
-        let displayLabel = isGameStarted ? label.toUpperCase() : "WAITING";
-        text(`${displayLabel} (${(confidence * 100).toFixed(0)}%)`, width - 20, 56);
-
-        // 底部 UI
-        fill(30, 41, 59, 240);
-        rect(0, height - 70, width, 70);
-
-        if (isGameStarted && label === "handup" && confidence >= 0.8) {
-            fill('#4ade80'); 
-        } else {
-            fill('#e2e8f0'); 
-        }
-        textSize(18);
-        textAlign(CENTER, CENTER);
-        textStyle(BOLD);
-        text(feedbackText, width / 2, height - 35);
-    }
-
-    function windowResized() {
-        let canvasWidth = windowWidth > 640 ? 640 : windowWidth - 20;
-        let canvasHeight = canvasWidth * (3 / 4);
-        resizeCanvas(canvasWidth, canvasHeight);
-    }
-    </script>
-</body>
-</html>
+    // 使用官方推薦的 requestAnimationFrame 循環，在 iPad 上不卡死、極度流暢
+    async function predictLoop() {
+        if (isGameStarted && model && video.elt) {
+            // 只要鏡頭準備好了（有畫面寬高），就進行預測
+            if (video.elt.readyState === video.elt.HAVE_ENOUGH_DATA) {
+                const prediction = await model.predict(video.elt);
+                
+                // 找出信心值最高的那一項
+                let highestIdx = 0;
+                let highestVal = 0;
+                for (let i = 0; i < maxPredictions; i++) {
+                    if (prediction[i].probability > highestVal) {
+                        highestVal = prediction[i].probability;
+                        highestIdx = i;
+                    }
+                }
+                
+                label = prediction[highestIdx].className;
