@@ -1,4 +1,3 @@
-// 你的 Teachable Machine 模型網址
 const URL = "https://teachablemachine.withgoogle.com/models/t5_tFFFbI/";
 
 let model, ctx, labelContainer, maxPredictions;
