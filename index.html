@@ -7,6 +7,7 @@
   
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@latest/dist/teachablemachine-pose.min.js"></script>
+  
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
@@ -19,8 +20,7 @@
     <div id="status">等待指令中...</div>
     
     <div class="canvas-container">
-      <video id="video" width="400" height="400" autoplay playsinline muted style="display:none;"></video>
-      <canvas id="canvas" width="400" height="400"></canvas>
+      <canvas id="canvas"></canvas>
     </div>
 
     <div id="label-container"></div>
@@ -31,6 +31,104 @@
     </div>
   </main>
 
-  <script src="script.js"></script>
+  <script>
+    // 換回你指定的 Class 3 大腦網址
+    const URL = "https://teachablemachine.withgoogle.com/models/t5_tFFFbI/";
+
+    let model, webcam, ctx, labelContainer, maxPredictions;
+    let score = 0;
+    let canScore = true; 
+
+    async function init() {
+        const statusDiv = document.getElementById("status");
+        statusDiv.innerText = "正在啟動攝像頭...";
+
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        try {
+            const size = 400;
+            const flip = true; 
+            webcam = new tmPose.Webcam(size, size, flip); 
+            
+            // 請求相機並破解 iPad 凍結限制
+            await webcam.setup({ facingMode: "user" }); 
+            if (webcam.webcam) {
+                webcam.webcam.setAttribute('playsinline', true);
+                webcam.webcam.setAttribute('muted', true);
+                webcam.webcam.muted = true;
+            }
+            await webcam.play();
+            statusDiv.innerText = "相機已就緒，正在加載模型...";
+
+            // 載入模型
+            model = await tmPose.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            const canvas = document.getElementById("canvas");
+            canvas.width = size;
+            canvas.height = size;
+            ctx = canvas.getContext("2d");
+
+            statusDiv.innerText = "偵測中... 請開始動作！";
+            window.requestAnimationFrame(loop);
+        } catch (e) {
+            console.error(e);
+            statusDiv.innerText = "錯誤: 無法開啟相機或載入模型。";
+        }
+    }
+
+    async function loop(timestamp) {
+        webcam.update(); 
+        await predict();
+        window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+        const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+        const prediction = await model.predict(posenetOutput);
+
+        if (pose) {
+            drawPose(pose);
+        }
+
+        let statusHTML = "";
+        for (let i = 0; i < maxPredictions; i++) {
+            const className = prediction[i].className;
+            const probability = prediction[i].probability;
+
+            statusHTML += `
+                <div class="prediction-row">
+                    <span class="class-name">${className}</span>
+                    <span class="class-bar-bg">
+                        <span class="class-bar-fill" style="width: ${(probability * 100)}%"></span>
+                    </span>
+                    <span class="class-pct">${(probability * 100).toFixed(0)}%</span>
+                </div>
+            `;
+
+            // 當 Class 3 大於 70% 且不在冷卻時間
+            if (className === "Class 3" && probability > 0.70 && canScore) {
+                score += 1; 
+                document.getElementById("score-display").innerText = score;
+                
+                canScore = false;
+                setTimeout(() => { canScore = true; }, 1000); 
+            }
+        }
+        document.getElementById("label-container").innerHTML = statusHTML;
+    }
+
+    function drawPose(pose) {
+        if (webcam.canvas) {
+            ctx.drawImage(webcam.canvas, 0, 0);
+            if (pose) {
+                const minPartConfidence = 0.5;
+                tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+                tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+            }
+        }
+    }
+  </script>
 </body>
 </html>
