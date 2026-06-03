@@ -3,7 +3,7 @@ const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/";
 
 let model, webcam, ctx, maxPredictions;
 let score = 0;
-let lastStatus = "down"; // 狀態鎖
+let isReadyToScore = true; // 是否準備好可以得分（取代原本的 lastStatus）
 
 // 運動激勵語錄庫
 const motivationalQuotes = [
@@ -65,37 +65,31 @@ async function predict() {
         drawPose(pose);
     }
 
+    // 只抓取 handup 的機率
     let handupProbability = 0;
-    let handdownProbability = 0;
-
     for (let i = 0; i < maxPredictions; i++) {
         if (prediction[i].className === "handup") {
             handupProbability = prediction[i].probability;
-        } else if (prediction[i].className === "handdown") {
-            handdownProbability = prediction[i].probability;
         }
     }
 
     const labelContainer = document.getElementById("label-container");
 
-    // --- 🛠️ 核心除錯：優化後的計分與動態解鎖邏輯 ---
-    
-    // 1. 舉手判定：維持 70% 門檻。必須是從 down 狀態上來才算分
-    if (handupProbability >= 0.70 && lastStatus === "down") {
+    // --- 🛠️ 終極修正：計時冷卻制 ---
+    // 如果 handup 超過 70% 且目前是處於可以得分的狀態
+    if (handupProbability >= 0.70 && isReadyToScore) {
         score++;
-        lastStatus = "up"; // 鎖定狀態，防止重複瘋狂加分
         document.getElementById("score-display").innerText = score;
         labelContainer.innerHTML = "🎯 太棒了！得分！ 🎯";
-    } 
-    
-    // 2. 放手解鎖判定：大幅放寬條件（只要手舉高機率跌破 30%，或者手放下的機率高於 40%）
-    // 這樣可以確保玩家只要手一放低，就能 100% 成功解鎖
-    else if ((handupProbability < 0.30 || handdownProbability > 0.40) && lastStatus === "up") {
-        lastStatus = "down"; // 成功解鎖！準備拿下一分
         
-        // 隨機換一句鼓勵語
-        let randomIndex = Math.floor(Math.random() * motivationalQuotes.length);
-        labelContainer.innerHTML = motivationalQuotes[randomIndex];
+        isReadyToScore = false; // 關閉得分機制，進入冷卻狀態
+
+        // 1.5 秒 (1500 毫秒) 後自動解鎖，並換上加油語錄
+        setTimeout(() => {
+            isReadyToScore = true; // 重新開放得分
+            let randomIndex = Math.floor(Math.random() * motivationalQuotes.length);
+            labelContainer.innerHTML = motivationalQuotes[randomIndex] + " (準備下一發！)";
+        }, 1500); 
     }
 }
 
