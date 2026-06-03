@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 肩推計數器</title>
+    <title>AI 肩推計數器 - Pose 終極版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ml5@0.12.2/dist/ml5.min.js"></script>
     <style>
@@ -19,41 +19,73 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         }
         #canvas-container {
+            position: relative;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
             border-radius: 12px;
             overflow: hidden;
+            width: 640px;
+            height: 480px;
+        }
+        /* 解鎖 iPad 鏡頭的安全啟動按鈕 */
+        #start-btn {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 16px 36px;
+            font-size: 22px;
+            font-weight: bold;
+            color: white;
+            background-color: #34c759; /* 健身綠 */
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(52,199,89,0.4);
+            z-index: 999;
+        }
+        #start-btn:active {
+            background-color: #248a3d;
         }
     </style>
 </head>
 <body>
 
-<div id="canvas-container"></div>
+<div id="canvas-container">
+    <button id="start-btn" onclick="startCamera()">點擊啟動 AI 相機</button>
+</div>
 
 <script>
-// ✅ 已經幫你替換好你的專屬模型網址了！
-const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/"; 
+// ✅ 已經幫你綁定最新骨架模型網址！
+const URL = "https://teachablemachine.withgoogle.com/models/Bcp6i6fs_/"; 
 
 let video;
 let classifier;
-let label = "等待模型載入...";
+let label = "請先點擊按鈕啟動";
 let confidence = 0;
+let isVideoReady = false;
 
 // 計數邏輯變數
 let repCount = 0;         
 let hasPressed = false;   
-let triggerThreshold = 0.65; // 信心度門檻 65%
+let triggerThreshold = 0.70; // 信心度門檻 70%
 
 function preload() {
-    // 載入你的 AI 模型
+    // 預先載入你的 Pose 模型
     classifier = ml5.imageClassifier(URL + 'model.json');
 }
 
 function setup() {
-    // 建立 4:3 畫布
+    // 建立適合 iPad 的 4:3 畫布
     let canvas = createCanvas(640, 480);
     canvas.parent('canvas-container');
+    background(0);
+}
 
-    // iPad 鏡頭參數設定
+// 當使用者點擊按鈕時，才正式啟動鏡頭（100% 繞過 iOS 限制）
+function startCamera() {
+    document.getElementById("start-btn").style.display = "none";
+    label = "正在載入模型與相機...";
+
     let constraints = {
         video: {
             facingMode: "user",
@@ -64,61 +96,59 @@ function setup() {
     };
     
     video = createCapture(constraints, function(stream) {
-        console.log("鏡頭啟動成功");
+        console.log("iPad 鏡頭成功啟動");
+        isVideoReady = true;
+        classifyVideo(); // 鏡頭就緒後才開始辨識
     });
     video.size(640, 480);
     video.hide(); 
-
-    // 開始偵測
-    classifyVideo();
 }
 
 function draw() {
-    // 畫出鏡頭畫面（鏡像翻轉，像照鏡子一樣）
+    if (!isVideoReady) {
+        // 鏡頭還沒好之前，顯示提示黑畫面
+        background(0);
+        fill(255);
+        textAlign(CENTER, CENTER);
+        textSize(24);
+        text(label, width / 2, height / 2);
+        return;
+    }
+
+    // 1. 畫出鏡頭畫面（鏡像翻轉，像照鏡子一樣自然）
     translate(width, 0);
     scale(-1, 1);
     image(video, 0, 0, width, height);
     
-    // 還原座標系畫文字與 UI
+    // 還原座標系以利繪製文字 UI
     translate(width, 0);
     scale(-1, 1);
 
-    // 上方半透明裝飾條
+    // 2. 上方半透明裝飾黑條
     noStroke();
-    fill(0, 0, 0, 100);
+    fill(0, 0, 0, 120);
     rect(0, 0, width, 80);
 
-    // 顯示當前偵測標籤（肩推 / 肩下）
+    // 3. 顯示當前偵測到的動作（肩推 / 肩下 / 背景）
     textAlign(LEFT, CENTER);
     textSize(20);
     fill(255);
     text("目前動作: " + label + " (" + floor(confidence * 100) + "%)", 20, 40);
 
-    // 顯示累計下數
+    // 4. 右上角巨大金黃色計數器
     textAlign(RIGHT, CENTER);
     textSize(48);
     fill(255, 215, 0); 
     text(repCount + " 下", width - 20, 40);
 
-    // 運動狀態即時提示
+    // 5. 下方動態提示
     if (hasPressed) {
         textAlign(CENTER, CENTER);
         textSize(32);
         fill(0, 255, 127); 
-        text("偵測到肩推！請放回【肩下】", width / 2, height - 50);
+        text("偵測到【肩推】！請放回【肩下】", width / 2, height - 50);
     }
 }
 
 function classifyVideo() {
-    classifier.classify(video, gotResult);
-}
-
-// 核心偵測與計數函式
-function gotResult(error, results) {
-    if (error) {
-        console.error(error);
-        return;
-    }
-    
-    // 取得最符合的動作標籤
-    label =
+    if (isVideoReady) {
