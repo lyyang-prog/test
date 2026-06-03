@@ -1,129 +1,31 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI 活力集氣挑戰賽</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
     
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #0f172a; 
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-        }
-        #canvas-container {
-            position: relative;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            border-radius: 20px;
-            overflow: hidden;
-            border: 4px solid #38bdf8; 
-        }
-    </style>
+    <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-
-    <div id="canvas-container"></div>
-
-    <script>
-    const modelURL = 'https://teachablemachine.withgoogle.com/models/_qNCgNZbP/';
-    let model, video, maxPredictions;
-    let label = "等待啟動";
-    let confidence = 0.0;
-    let score = 0;
-    let feedbackText = "點擊畫面任意處啟動鏡頭與 AI 🚀";
-    let isGameStarted = false; 
-    let hasScoredThisTime = false; 
-
-    const motivationalQuotes = [
-        "加油！把手高高舉起！ 🙌",
-        "再伸展多一點，你可以的！ 🔥",
-        "運動讓大腦更清醒，繼續衝！ ⚡",
-        "手舉得越高，能量就滿滿！ 💪",
-        "堅持住！下一分馬上就到！ 🚀"
-    ];
-
-    // 非同步載入谷歌官方模型
-    async function initAI() {
-        try {
-            const checkpointURL = modelURL + "model.json";
-            const metadataURL = modelURL + "metadata.json";
-            
-            feedbackText = "正在下載 AI 模型... ⏳";
-            model = await tmImage.load(checkpointURL, metadataURL);
-            maxPredictions = model.getTotalClasses();
-            
-            feedbackText = "AI 載入成功！開始分析鏡頭... ✨";
-            predictLoop(); // 進入循環預測
-        } catch (err) {
-            console.error(err);
-            feedbackText = "模型載入出錯，請檢查網址或網路！";
-        }
-    }
-
-    function setup() {
-        let canvasWidth = windowWidth > 640 ? 640 : windowWidth - 20;
-        let canvasHeight = canvasWidth * (3 / 4);
+    <main>
+        <h1>AI Power Challenge</h1>
+        <button type="button" onclick="init()">START WORKOUT</button>
+        <div id="status">Ready to Scan</div>
         
-        let canvas = createCanvas(canvasWidth, canvasHeight);
-        canvas.parent('canvas-container');
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+        </div>
 
-        // iPad 鏡頭規格優化
-        let constraints = {
-            video: {
-                facingMode: 'user',
-                width: { ideal: 640 },
-                height: { ideal: 480 }
-            },
-            audio: false
-        };
-        
-        video = createCapture(constraints);
-        video.size(canvasWidth, canvasHeight);
-        video.hide(); 
-    }
+        <div class="score-card">
+            <div class="label">TOTAL SCORE</div>
+            <h2 id="score-display">0</h2>
+            <div id="label-container">請點擊上方按鈕開始</div>
+        </div>
+    </main>
 
-    // 點擊畫面時，觸發 iPad 的硬體鏡頭播放與 AI 載入
-    function mousePressed() {
-        if (!isGameStarted) {
-            isGameStarted = true;
-            feedbackText = "初始化相機中...";
-            
-            // 強制啟動視訊流（修復 iOS 暫停限制）
-            if (video.elt) {
-                video.elt.play();
-            }
-            
-            initAI();
-        }
-    }
-
-    // 使用官方推薦的 requestAnimationFrame 循環，在 iPad 上不卡死、極度流暢
-    async function predictLoop() {
-        if (isGameStarted && model && video.elt) {
-            // 只要鏡頭準備好了（有畫面寬高），就進行預測
-            if (video.elt.readyState === video.elt.HAVE_ENOUGH_DATA) {
-                const prediction = await model.predict(video.elt);
-                
-                // 找出信心值最高的那一項
-                let highestIdx = 0;
-                let highestVal = 0;
-                for (let i = 0; i < maxPredictions; i++) {
-                    if (prediction[i].probability > highestVal) {
-                        highestVal = prediction[i].probability;
-                        highestIdx = i;
-                    }
-                }
-                
-                label = prediction[highestIdx].className;
+    <script src="script.js"></script>
+</body>
+</html>
