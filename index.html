@@ -3,16 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 肩推計數器 - 原生核心版</title>
+    <title>AI Pose Shoulder Press Counter</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.11.0/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8.6/dist/teachablemachine-pose.min.js"></script>
     <style>
+        :root {
+            --primary-color: #34c759;
+            --accent-color: #ffd700;
+            --bg-color: #121212;
+        }
         body {
             margin: 0;
             padding: 0;
-            background-color: #1a1a1a;
+            background-color: var(--bg-color);
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
             height: 100vh;
@@ -21,16 +25,17 @@
         }
         #canvas-container {
             position: relative;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            border-radius: 12px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            border-radius: 16px;
             overflow: hidden;
             width: 640px;
             height: 480px;
-            background-color: #000;
+            background-color: #000000;
         }
-        /* 讓鏡頭骨架畫面水平翻轉，像照鏡子一樣自然 */
-        #canvas-container canvas {
-            transform: scaleX(-1);
+        #my-canvas {
+            width: 100%;
+            height: 100%;
+            transform: scaleX(-1); /* 鏡像翻轉 */
         }
         .ui-layer {
             position: absolute;
@@ -38,53 +43,40 @@
             width: 100%;
             box-sizing: border-box;
             pointer-events: none;
-            color: white;
-            text-shadow: 1px 1px 4px rgba(0,0,0,0.8);
+            color: #ffffff;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.8);
             z-index: 10;
         }
         .top-bar {
             top: 0;
-            height: 80px;
-            background: rgba(0, 0, 0, 0.6);
+            height: 90px;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), rgba(0,0,0,0));
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 0 20px;
+            padding: 0 24px;
         }
         .bottom-bar {
-            bottom: 30px;
+            bottom: 32px;
             text-align: center;
-            font-size: 32px;
-            color: #00FF7F;
-            font-weight: bold;
+            font-size: 28px;
+            color: #00ff7f;
+            font-weight: 700;
+            letter-spacing: 1px;
         }
-        /* 專為 iOS 設置的強制啟動大按鈕 */
         #start-btn {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            padding: 18px 40px;
-            font-size: 24px;
-            font-weight: bold;
-            color: white;
-            background-color: #ff3b30; /* 警示紅，點擊解鎖 */
+            padding: 18px 44px;
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            background-color: var(--primary-color);
             border: none;
-            border-radius: 12px;
+            border-radius: 50px;
             cursor: pointer;
-            box-shadow: 0 4px 15px rgba(255,59,48,0.4);
-            z-index: 999;
-        }
-    </style>
-</head>
-<body>
-
-<div id="canvas-container">
-    <button id="start-btn" onclick="init()">點擊解鎖 AI 相機</button>
-    
-    <div class="ui-layer top-bar">
-        <div id="label-container" style="font-size: 20px;">請點擊按鈕解鎖相機</div>
-        <div id="counter-container" style="font-size: 48px; color: #FFD700; font-weight: bold;">0 下</div>
-    </div>
-
-    <div id="hint-container" class="ui-layer bottom-bar">
+            box-shadow: 0 8px 24px rgba(52,199,89,0.3);
+            transition: all 0.2s ease;
+            z-index:
