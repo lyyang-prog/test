@@ -1,11 +1,11 @@
-// 1. 更換成你這一次新訓練好的 Pose 模型網址！
+// 1. 沿用你的最新 Pose 模型網址
 const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/";
 
 let model, webcam, ctx, maxPredictions;
 let score = 0;
-let lastStatus = "down"; // 用來防止單次動作連續重複加分的狀態鎖
+let lastStatus = "down"; // 狀態鎖：防止單次動作連續重複加分
 
-// 專屬運動激勵語錄庫
+// 運動激勵語錄庫
 const motivationalQuotes = [
     "加油！把手高高舉起！ 🙌",
     "再伸展多一點，你可以的！ 🔥",
@@ -23,7 +23,7 @@ async function init() {
 
     try {
         const size = 400;
-        const flip = true; // 鏡像翻轉，玩家看自己更自然
+        const flip = true; // 鏡像翻轉
         
         // 使用驗證成功、相容 iPad 的 tmPose 視訊模組
         webcam = new tmPose.Webcam(size, size, flip); 
@@ -70,7 +70,7 @@ async function predict() {
         drawPose(pose);
     }
 
-    // --- 安全且精準的標籤動態搜尋邏輯 ---
+    // 動態標籤搜尋
     let handupProbability = 0;
     let handdownProbability = 0;
 
@@ -84,25 +84,19 @@ async function predict() {
 
     const labelContainer = document.getElementById("label-container");
 
-    // 遊戲核心計數與反饋判斷
-    // 當偵測到 handup 機率大於等於 80% (0.80) 且上次狀態是放下的
-    if (handupProbability >= 0.80 && lastStatus === "down") {
+    // --- 核心遊戲得分判斷（已修正為 70% 門檻） ---
+    // 當偵測到 handup 機率大於等於 70% (0.70) 且上次狀態是放下的
+    if (handupProbability >= 0.70 && lastStatus === "down") {
         score++;
         lastStatus = "up";
         document.getElementById("score-display").innerText = score;
         labelContainer.innerHTML = "🎯 太棒了！得分！ 🎯";
-        
     } 
-    // 當 handdown 機率大於 80% 時，重置狀態鎖，並隨機更換一句加油語錄
-    else if (handdownProbability > 0.80 && lastStatus === "up") {
+    // 當 handdown 機率大於 70% (0.70) 時，重置狀態鎖，並更換加油語錄
+    else if (handdownProbability > 0.70 && lastStatus === "up") {
         lastStatus = "down";
         let randomIndex = Math.floor(Math.random() * motivationalQuotes.length);
         labelContainer.innerHTML = motivationalQuotes[randomIndex];
-    }
-    
-    // 如果手停留在高處，持續顯示目前的狀態百分比
-    if (handupProbability >= 0.80) {
-        // 不做動作，保持「得分」或更新進度
     }
 }
 
