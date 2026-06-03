@@ -2,29 +2,32 @@
 <html lang="zh-TW">
 <head>
   <meta charset="UTF-8" />
-  <title>AI 動作感應遊戲 - Class 3 加分版</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>AI 體感運動遊戲</title>
+  
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@latest/dist/teachablemachine-pose.min.js"></script>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <main style="text-align: center; padding: 20px; font-family: sans-serif;">
-    <h1>AI 動作感應遊戲</h1>
-    <p>規則：偵測到 <b>Class 3</b> 超過 70% 就加 1 分！</p>
+  <main>
+    <h1>AI 體感挑戰賽</h1>
+    <p>規則：偵測到 <span>Class 3</span> 超過 70% 加 1 分！</p>
     
-    <button type="button" onclick="init()" style="font-size: 20px; padding: 10px 20px; cursor: pointer; background-color: #4CAF50; color: white; border: none; border-radius: 5px;">
-      開始連線攝像頭
-    </button>
+    <button type="button" onclick="init()">啟動運動相機</button>
     
-    <div id="status" style="margin: 15px 0; color: #666;">等待指令中...</div>
+    <div id="status">等待指令中...</div>
     
-    <div style="display: flex; justify-content: center; margin-bottom: 20px;">
-      <canvas id="canvas" style="border: 2px solid #333; border-radius: 10px;"></canvas>
+    <div class="canvas-container">
+      <canvas id="canvas"></canvas>
     </div>
 
-    <div id="label-container" style="font-size: 18px; color: #333; margin-bottom: 10px; min-height: 50px;"></div>
+    <div id="label-container"></div>
     
-    <h2 id="score-display" style="font-size: 50px; color: #e91e63; margin: 0;">分數：0</h2>
+    <div class="score-box">
+      <h2 id="score-display">0</h2>
+      <span class="score-label">SCORE</span>
+    </div>
   </main>
 
   <script src="script.js"></script>
