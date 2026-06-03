@@ -4,53 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI 活力集氣挑戰賽</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.4.0/p5.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/ml5@0.12.2/dist/ml5.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #0f172a; /* 深藍色高質感運動背景 */
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            -webkit-touch-callout: none;
-            -webkit-user-select: none;
-        }
-        #canvas-container {
-            position: relative;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            border-radius: 20px;
-            overflow: hidden;
-            border: 4px solid #38bdf8; /* 科技藍霓虹邊框 */
-        }
-    </style>
+    
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div id="canvas-container"></div>
 
-<script>
-// --- 遊戲設定與變數 ---
-const modelURL = 'https://teachablemachine.withgoogle.com/models/_qNCgNZbP/';
-let video;
-let classifier;
-let label = "模型載入中...";
-let confidence = 0.0;
-let score = 0;
-let feedbackText = "準備好開始運動了嗎？";
-let hasScoredThisTime = false; // 防止單次舉手重複連續加分
-
-// 激勵語錄資料庫（隨機顯示）
-const motivationalQuotes = [
-    "加油！把手高高舉起！ 🙌",
-    "再伸展多一點，你可以的！ 🔥",
-    "運動讓大腦更清醒，繼續衝！ ⚡",
-    "手舉得越高，能量就滿滿！ 💪",
-    "堅持住！下一分馬上就到！ 🚀"
-];
-
-function preload
+    <script src="game.js"></script>
+</body>
+</html>
