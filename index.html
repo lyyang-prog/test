@@ -1,136 +1,38 @@
-<!DOCTYPE html>
-<html lang="zh-TW">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 肩推計數器</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/ml5@0.12.2/dist/ml5.min.js"></script>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #1a1a1a;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-        }
-        #canvas-container {
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            border-radius: 12px;
-            overflow: hidden;
-        }
-    </style>
-</head>
-<body>
-
-<div id="canvas-container"></div>
-
-<script>
-// === 請在此處貼上你在 Teachable Machine 訓練好的模型網址 ===
-const URL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL_ID/"; 
-
-let video;
-let classifier;
-let label = "等待模型載入...";
-let confidence = 0;
-
-// --- 計數邏輯變數 ---
-let repCount = 0;         // 肩推總下數
-let hasPressed = false;   // 標記：使用者是否已經把手推高了？
-let threshold = 0.85;     // 信心度門檻（需達到 85% 以上才認定該動作成立）
-
-function preload() {
-    // 分類器載入模型
-    classifier = ml5.imageClassifier(URL + 'model.json');
-}
-
-function setup() {
-    // 配合 iPad 螢幕，採用 4:3 比例 (640x480)
-    let canvas = createCanvas(640, 480);
-    canvas.parent('canvas-container');
-
-    // 建立視訊鏡頭，並設定適合 iPad 的 constraints
-    let constraints = {
-        video: {
-            facingMode: "user", // 使用前鏡頭
-            width: 640,
-            height: 480
-        },
-        audio: false
-    };
-    
-    video = createCapture(constraints, function(stream) {
-        console.log("鏡頭啟動成功");
-    });
-    video.size(640, 480);
-    video.hide(); // 隱藏原生 HTML 標籤，我們要在 Canvas 上畫出來
-
-    // 開始進行 AI 影像分類
-    classifyVideo();
-}
-
-function draw() {
-    // 1. 畫出鏡頭畫面（左右反轉，像照鏡子一樣比較直覺）
-    translate(width, 0);
-    scale(-1, 1);
-    image(video, 0, 0, width, height);
-    
-    // 還原座標系，方便畫文字與 UI
-    translate(width, 0);
-    scale(-1, 1);
-
-    // 2. 畫出半透明遮罩與 UI 介面
-    noStroke();
-    fill(0, 0, 0, 100);
-    rect(0, 0, width, 80);
-
-    // 3. 顯示目前偵測到的狀態
-    textAlign(LEFT, CENTER);
-    textSize(20);
-    fill(255);
-    text("目前動作: " + translateLabel(label) + " (" + floor(confidence * 100) + "%)", 20, 40);
-
-    // 4. 巨大且明顯的計數器顯示
-    textAlign(RIGHT, CENTER);
-    textSize(48);
-    fill(255, 215, 0); // 金黃色
-    text(repCount + " 下", width - 20, 40);
-
-    // 5. 畫面視覺回饋：如果已經推高，顯示提示
-    if (hasPressed) {
-        textAlign(CENTER, CENTER);
-        textSize(32);
-        fill(0, 255, 127); // 春綠色
-        text("很好！請確實放下雙手", width / 2, height - 50);
-    }
-}
-
-// 轉換標籤成中文，讓畫面更好看
-function translateLabel(engLabel) {
-    if (engLabel === "rest") return "準備/放下";
-    if (engLabel === "press") return "推高";
-    if (engLabel === "background") return "無人/雜訊";
-    return engLabel;
-}
-
-// 核心 AI 分類與計數邏輯
-function classifyVideo() {
-    classifier.classify(video, gotResult);
-}
-
+// === 精準對齊「肩推」、「肩下」的計數邏輯 ===
 function gotResult(error, results) {
     if (error) {
         console.error(error);
         return;
     }
     
-    // 取得最高信心的分類結果
-    label = results[0].label;
+    // 1. 取得最高信心的分類結果（去除前後空格）
+    label = results[0].label.trim();
     confidence = results[0].confidence;
 
-    // === 核心計數狀態機邏輯 ===
-    if (confidence > threshold)
+    // 2. 設定判定門檻為 65%
+    let triggerThreshold = 0.65; 
+
+    if (confidence > triggerThreshold) {
+        
+        // 狀態 A：當偵測到「肩推」，且之前還沒被標記過
+        if (label === "肩推" && !hasPressed) {
+            hasPressed = true; 
+            console.log("偵測到【肩推】！請確實將手放下到【肩下】位置。");
+        }
+        
+        // 狀態 B：已經做完肩推了，這時動作確實回到「肩下」
+        if (label === "肩下" && hasPressed) {
+            repCount++;         // 確實完成完整的一下，次數 +1！
+            hasPressed = false; // 重設訊號，等待下一次肩推
+            console.log("偵測到【肩下】！動作完成，目前累計：" + repCount + " 下");
+        }
+    }
+
+    // 持續循環偵測
+    classifyVideo();
+}
+
+// 畫面顯示的文字轉換（既然本來就是中文，直接回傳即可）
+function translateLabel(engLabel) {
+    return engLabel; 
+}
