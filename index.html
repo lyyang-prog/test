@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <title>AI 體感運動遊戲</title>
+  <title>AI 舉手體感挑戰賽</title>
   
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
@@ -12,8 +12,8 @@
 </head>
 <body>
   <main>
-    <h1>AI 體感挑戰賽</h1>
-    <p>規則：偵測到 <span>Class 3</span> 超過 70% 加 1 分！</p>
+    <h1>AI 舉手挑戰賽</h1>
+    <p>規則：偵測到 <span>handup</span> 超過 80% 加 1 分！</p>
     
     <button type="button" onclick="init()">啟動運動相機</button>
     
@@ -33,95 +33,32 @@
   </main>
 
   <script>
-    // 你的 Class 3 大腦網址
+    // 串接你剛出爐的全新大腦網址
     const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/";
 
-    let model, ctx, labelContainer, maxPredictions;
-    let video, canvas;
+    let model, ctx, video, canvas, maxPredictions;
     let score = 0;
-    let canScore = true; 
+    let canScore = true; // 控制 1 秒冷卻時間的開關
 
     async function init() {
         const statusDiv = document.getElementById("status");
-        statusDiv.innerText = "正在啟動攝像頭...";
-
-        const modelURL = URL + "model.json";
-        const metadataURL = URL + "metadata.json";
+        statusDiv.innerText = "正在喚醒相機權限...";
 
         try {
             video = document.getElementById("video");
             canvas = document.getElementById("canvas");
             ctx = canvas.getContext("2d");
 
-            // 1. 使用你之前成功專案的純原生相機請求
+            // 1. 直接向 iPad 請求硬體相機
             const stream = await navigator.mediaDevices.getUserMedia({
                 video: { facingMode: "user", width: 400, height: 400 },
                 audio: false
             });
             
             video.srcObject = stream;
-            // 這裡必須加上 play()
             await video.play();
             
-            statusDiv.innerText = "相機已就緒，正在加載模型...";
+            statusDiv.innerText = "相機已就緒，正在下載 AI 新大腦...";
 
-            // 2. 載入模型
-            model = await tmPose.load(modelURL, metadataURL);
-            maxPredictions = model.getTotalClasses();
-
-            statusDiv.innerText = "偵測中... 請開始動作！";
-            window.requestAnimationFrame(loop);
-        } catch (e) {
-            console.error(e);
-            // 如果出錯，把真正的錯誤訊息吐在網頁上，方便我們抓鬼
-            statusDiv.innerText = "錯誤訊息: " + e.message;
-        }
-    }
-
-    async function loop(timestamp) {
-        if (video.readyState === video.HAVE_ENOUGH_DATA) {
-            // 把相機畫面畫到畫布上
-            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-            
-            // AI 預測
-            const { pose, posenetOutput } = await model.estimatePose(video);
-            const prediction = await model.predict(posenetOutput);
-
-            let statusHTML = "";
-            for (let i = 0; i < maxPredictions; i++) {
-                const className = prediction[i].className;
-                const probability = prediction[i].probability;
-
-                statusHTML += `
-                    <div class="prediction-row">
-                        <span class="class-name">${className}</span>
-                        <span class="class-bar-bg">
-                            <span class="class-bar-fill" style="width: ${(probability * 100)}%"></span>
-                        </span>
-                        <span class="class-pct">${(probability * 100).toFixed(0)}%</span>
-                    </div>
-                `;
-
-                // Class 3 大於 70% 且不在冷卻時間就加分
-                if (className === "Class 3" && probability > 0.70 && canScore) {
-                    score += 1; 
-                    document.getElementById("score-display").innerText = score;
-                    
-                    canScore = false;
-                    setTimeout(() => { canScore = true; }, 1000); 
-                }
-            }
-            document.getElementById("label-container").innerHTML = statusHTML;
-
-            // 畫出骨架
-            if (pose) {
-                const minPartConfidence = 0.5;
-                tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
-                tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
-            }
-        }
-        window.requestAnimationFrame(loop);
-    }
-  </script>
-</body>
-</html>
+            // 2. 載入你的新模型檔案
+            const modelURL = URL + "model.json";
