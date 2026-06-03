@@ -30,8 +30,8 @@
 <div id="canvas-container"></div>
 
 <script>
-// ⚠️ 請記得把這裡的網址，換成你在 Teachable Machine 複製的 model 網址喔！
-const URL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL_ID/"; 
+// ✅ 已經幫你替換好你的專屬模型網址了！
+const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/"; 
 
 let video;
 let classifier;
@@ -44,7 +44,7 @@ let hasPressed = false;
 let triggerThreshold = 0.65; // 信心度門檻 65%
 
 function preload() {
-    // 載入 AI 模型
+    // 載入你的 AI 模型
     classifier = ml5.imageClassifier(URL + 'model.json');
 }
 
@@ -74,21 +74,51 @@ function setup() {
 }
 
 function draw() {
-    // 畫出鏡頭畫面（鏡像翻轉）
+    // 畫出鏡頭畫面（鏡像翻轉，像照鏡子一樣）
     translate(width, 0);
     scale(-1, 1);
     image(video, 0, 0, width, height);
     
-    // 還原座標系畫文字
+    // 還原座標系畫文字與 UI
     translate(width, 0);
     scale(-1, 1);
 
-    // 上方黑底裝飾條
+    // 上方半透明裝飾條
     noStroke();
     fill(0, 0, 0, 100);
     rect(0, 0, width, 80);
 
-    // 顯示當前偵測標籤
+    // 顯示當前偵測標籤（肩推 / 肩下）
     textAlign(LEFT, CENTER);
     textSize(20);
     fill(255);
+    text("目前動作: " + label + " (" + floor(confidence * 100) + "%)", 20, 40);
+
+    // 顯示累計下數
+    textAlign(RIGHT, CENTER);
+    textSize(48);
+    fill(255, 215, 0); 
+    text(repCount + " 下", width - 20, 40);
+
+    // 運動狀態即時提示
+    if (hasPressed) {
+        textAlign(CENTER, CENTER);
+        textSize(32);
+        fill(0, 255, 127); 
+        text("偵測到肩推！請放回【肩下】", width / 2, height - 50);
+    }
+}
+
+function classifyVideo() {
+    classifier.classify(video, gotResult);
+}
+
+// 核心偵測與計數函式
+function gotResult(error, results) {
+    if (error) {
+        console.error(error);
+        return;
+    }
+    
+    // 取得最符合的動作標籤
+    label =
