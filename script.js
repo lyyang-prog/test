@@ -3,7 +3,7 @@ const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/";
 
 let model, webcam, ctx, maxPredictions;
 let score = 0;
-let lastStatus = "down"; // 狀態鎖：防止單次動作連續重複加分
+let lastStatus = "down"; // 狀態鎖
 
 // 運動激勵語錄庫
 const motivationalQuotes = [
@@ -23,21 +23,18 @@ async function init() {
 
     try {
         const size = 400;
-        const flip = true; // 鏡像翻轉
+        const flip = true; 
         
-        // 使用驗證成功、相容 iPad 的 tmPose 視訊模組
         webcam = new tmPose.Webcam(size, size, flip); 
         
-        await webcam.setup(); // 請求相機權限
+        await webcam.setup(); 
         await webcam.play();
         
         statusDiv.innerText = "相機就緒，正在加載 AI 模型...";
 
-        // 載入模型
         model = await tmPose.load(modelURL, metadataURL);
         maxPredictions = model.getTotalClasses();
 
-        // 設定 Canvas
         const canvas = document.getElementById("canvas");
         canvas.width = size;
         canvas.height = size;
@@ -54,23 +51,20 @@ async function init() {
 
 async function loop(timestamp) {
     if (webcam) {
-        webcam.update(); // 實時更新視訊畫面
+        webcam.update(); 
         await predict();
     }
     window.requestAnimationFrame(loop);
 }
 
 async function predict() {
-    // 透過 Pose 模型進行姿勢估算與預測
     const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
     const prediction = await model.predict(posenetOutput);
 
-    // 繪製玩家畫面與彩色骨架點
     if (pose) {
         drawPose(pose);
     }
 
-    // 動態標籤搜尋
     let handupProbability = 0;
     let handdownProbability = 0;
 
@@ -84,17 +78,22 @@ async function predict() {
 
     const labelContainer = document.getElementById("label-container");
 
-    // --- 核心遊戲得分判斷（已修正為 70% 門檻） ---
-    // 當偵測到 handup 機率大於等於 70% (0.70) 且上次狀態是放下的
+    // --- 🛠️ 核心除錯：優化後的計分與動態解鎖邏輯 ---
+    
+    // 1. 舉手判定：維持 70% 門檻。必須是從 down 狀態上來才算分
     if (handupProbability >= 0.70 && lastStatus === "down") {
         score++;
-        lastStatus = "up";
+        lastStatus = "up"; // 鎖定狀態，防止重複瘋狂加分
         document.getElementById("score-display").innerText = score;
         labelContainer.innerHTML = "🎯 太棒了！得分！ 🎯";
     } 
-    // 當 handdown 機率大於 70% (0.70) 時，重置狀態鎖，並更換加油語錄
-    else if (handdownProbability > 0.70 && lastStatus === "up") {
-        lastStatus = "down";
+    
+    // 2. 放手解鎖判定：大幅放寬條件（只要手舉高機率跌破 30%，或者手放下的機率高於 40%）
+    // 這樣可以確保玩家只要手一放低，就能 100% 成功解鎖
+    else if ((handupProbability < 0.30 || handdownProbability > 0.40) && lastStatus === "up") {
+        lastStatus = "down"; // 成功解鎖！準備拿下一分
+        
+        // 隨機換一句鼓勵語
         let randomIndex = Math.floor(Math.random() * motivationalQuotes.length);
         labelContainer.innerHTML = motivationalQuotes[randomIndex];
     }
@@ -103,7 +102,6 @@ async function predict() {
 function drawPose(pose) {
     if (webcam.canvas) {
         ctx.drawImage(webcam.canvas, 0, 0);
-        // 繪製骨架節點
         if (pose) {
             const minPartConfidence = 0.5;
             tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
