@@ -5,7 +5,8 @@ let classifier;
 let label = "模型載入中...";
 let confidence = 0.0;
 let score = 0;
-let feedbackText = "準備好開始運動了嗎？";
+let feedbackText = "點擊畫面任意處以啟動鏡頭與 AI 🚀";
+let isGameStarted = false; // iPad iOS 觸發鎖
 let hasScoredThisTime = false; 
 
 // 運動激勵語錄
@@ -18,7 +19,7 @@ const motivationalQuotes = [
 ];
 
 function preload() {
-    // 載入你的 Teachable Machine 模型
+    // 載入 Teachable Machine 模型
     classifier = ml5.imageClassifier(modelURL + 'model.json');
 }
 
@@ -30,7 +31,7 @@ function setup() {
     let canvas = createCanvas(canvasWidth, canvasHeight);
     canvas.parent('canvas-container');
 
-    // iPad 前鏡頭優化設定
+    // 初始化鏡頭（先不開啟，等待點擊）
     let constraints = {
         video: {
             facingMode: 'user',
@@ -39,16 +40,24 @@ function setup() {
         },
         audio: false
     };
-    
     video = createCapture(constraints);
     video.size(canvasWidth, canvasHeight);
     video.hide(); 
+}
 
-    classifyVideo();
+// 關鍵優化：解決 iPad Safari 限制，必須由使用者點擊畫面才能順利啟動相機
+function mousePressed() {
+    if (!isGameStarted) {
+        isGameStarted = true;
+        feedbackText = "AI 初始化中，請稍候...";
+        classifyVideo();
+    }
 }
 
 function classifyVideo() {
-    classifier.classify(video, gotResult);
+    if (isGameStarted) {
+        classifier.classify(video, gotResult);
+    }
 }
 
 function gotResult(error, results) {
@@ -81,15 +90,17 @@ function gotResult(error, results) {
 function draw() {
     background(15, 23, 42);
 
-    // 鏡像翻轉畫面
-    push();
-    translate(width, 0);
-    scale(-1, 1);
-    image(video, 0, 0, width, height);
-    pop();
+    if (isGameStarted) {
+        // 鏡像翻轉顯示相機畫面
+        push();
+        translate(width, 0);
+        scale(-1, 1);
+        image(video, 0, 0, width, height);
+        pop();
+    }
 
     // 科技感半透明遮罩
-    fill(15, 23, 42, 100);
+    fill(15, 23, 42, 130);
     rect(0, 0, width, height);
 
     // 頂部狀態列
@@ -114,36 +125,4 @@ function draw() {
     rect(width - barWidth - 20, 25, barWidth, 20, 5);
     
     noStroke();
-    if (label === "handup" && confidence >= 0.8) {
-        fill('#22c55e'); 
-    } else {
-        fill('#38bdf8'); 
-    }
-    rect(width - barWidth - 20, 25, fillWidth, 20, 5);
-
-    fill(255);
-    textSize(14);
-    textAlign(RIGHT, CENTER);
-    textStyle(NORMAL);
-    text(`${label.toUpperCase()} (${(confidence * 100).toFixed(0)}%)`, width - 20, 55);
-
-    // 底部運動風看板
-    fill(30, 41, 59, 220);
-    rect(0, height - 70, width, 70);
-
-    if (label === "handup" && confidence >= 0.8) {
-        fill('#4ade80'); 
-    } else {
-        fill('#e2e8f0'); 
-    }
-    textSize(20);
-    textAlign(CENTER, CENTER);
-    textStyle(BOLD);
-    text(feedbackText, width / 2, height - 35);
-}
-
-function windowResized() {
-    let canvasWidth = windowWidth > 640 ? 640 : windowWidth - 20;
-    let canvasHeight = canvasWidth * (3 / 4);
-    resizeCanvas(canvasWidth, canvasHeight);
-}
+    if
