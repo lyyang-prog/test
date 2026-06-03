@@ -3,113 +3,189 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 節奏打擊王 - 實測版</title>
+    <title>AI 節奏打擊王 - iPad 順暢版</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script src="https://unpkg.com/ml5@0.12.2/dist/ml5.min.js"></script>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: #0f172a; /* 深藍黑色背景 */
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            overflow: hidden;
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            touch-action: none;
-        }
-        #canvas-container {
-            position: relative;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
-            border-radius: 16px;
-            overflow: hidden;
-        }
-        #loading {
-            position: absolute;
-            color: white;
-            font-size: 22px;
-            background: rgba(15, 23, 42, 0.95);
-            width: 100%;
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 10;
-            transition: opacity 0.5s;
-        }
-        .spinner {
-            border: 4px solid rgba(255,255,255,0.1);
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border-left-color: #38bdf8;
-            animation: spin 1s linear infinite;
-            margin-bottom: 20px;
-        }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { margin: 0; padding: 0; background-color: #0f172a; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; touch-action: none; }
+        #canvas-container { position: relative; box-shadow: 0 20px 40px rgba(0,0,0,0.6); border-radius: 16px; overflow: hidden; }
+        #status-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); color: white; font-size: 20px; text-align: center; z-index: 10; width: 80%; }
     </style>
 </head>
 <body>
 
     <div id="canvas-container">
-        <div id="loading">
-            <div class="spinner"></div>
-            <div id="loading-text">正在載入專屬 AI 動作模型...</div>
-        </div>
+        <div id="status-text">正在初始化 iPad 鏡頭與 AI 模型...<br><small style="color:#64748b;">(若跳出權限提示，請務必點擊「允許」)</small></div>
     </div>
 
 <script>
-// === 載入你的專屬模型網址 ===
-const URL = "https://teachablemachine.withgoogle.com/models/Bcp6i6fs_/"; 
+// 修正網址拼接問題，直接指向 model.json
+const MODEL_URL = "https://teachablemachine.withgoogle.com/models/Bcp6i6fs_/model.json"; 
 
-let model, webcam, ctx, maxPredictions;
+let classifier;
+let video;
 let currentPose = "Idle";
-let confidence = 0;
-let isModelLoaded = false;
+let isLoaded = false;
 
-// 遊戲核心變數
 let score = 0;
-let notes = [];       // 掉落的氣球
-let particles = [];   // 爆炸粒子特效
-let targetY;          // 判定線 Y 座標
+let notes = [];
+let particles = [];
+let targetY;
 let spawnTimer = 0;
-let isPunchCooldown = false; 
+let isPunchCooldown = false;
 
 function setup() {
-    // 配合 iPad 4:3 比例與螢幕自動適應
     let canvasWidth = Math.min(window.innerWidth * 0.95, 800);
     let canvasHeight = canvasWidth * (3 / 4); 
-    
     let canvas = createCanvas(canvasWidth, canvasHeight);
     canvas.parent('canvas-container');
     
-    targetY = height * 0.75; // 判定線位於畫面上方 75% 處
+    targetY = height * 0.75;
+
+    // 1. 建立 p5.js 視訊，並針對 iOS/iPad 鏡頭做相容性設定
+    let constraints = {
+        video: {
+            facingMode: "user",
+            width: 320,
+            height: 240
+        },
+        audio: false
+    };
     
-    // 啟動 AI
-    initAI();
+    video = createCapture(constraints, function(stream) {
+        // 鏡頭成功啟動後，再開始載入 AI 模型
+        document.getElementById('status-text').innerText = "鏡頭已就緒，正在載入 AI 模型...";
+        classifier = ml5.imageClassifier(MODEL_URL, video, modelReady);
+    });
+    
+    // 隱藏 p5.js 預設隨機長在畫布下方的原生 HTML video 標籤
+    video.size(320, 240);
+    video.hide(); 
 }
 
-async function initAI() {
-    const modelURL = URL + "model.json";
-    const metadataURL = URL + "metadata.json";
+function modelReady() {
+    // 模型載入完成
+    isLoaded = true;
+    document.getElementById('status-text').style.display = 'none';
+    // 開始進行連續預測
+    classifyVideo();
+}
 
-    try {
-        model = await tmPose.load(modelURL, metadataURL);
-        maxPredictions = model.getTotalClasses();
+function classifyVideo() {
+    if (!isLoaded) return;
+    classifier.classify(gotResult);
+}
 
-        // iPad 鏡頭優化，使用前置鏡頭並調整解析度以求流暢
-        webcam = new tmPose.Webcam(320, 240, true); // flip = true 鏡像處理
-        await webcam.setup({ facingMode: "user" }); 
-        await webcam.play();
+function gotResult(error, results) {
+    if (error) {
+        console.error(error);
+        return;
+    }
+    
+    // 取得辨識結果
+    if (results && results.length > 0) {
+        let highest = results[0]; // 最高機率的動作
         
-        isModelLoaded = true;
-        // 隱藏載入畫面
-        document.getElementById('loading').style.opacity = 0;
-        setTimeout(() => document.getElementById('loading').style.display = 'none', 500);
-        
-        window.requestAnimationFrame(loopPredict);
-    } catch (e) {
-        console.error(e);
-        document.getElementById('loading-text').innerHTML = "<span style='color:#ef4444;'>❌ 鏡頭啟動失敗</span><br><small style='font-size:14px;color:#94a3b8;margin-top:10px
+        if (highest.confidence > 0.75) {
+            let oldPose = currentPose;
+            currentPose = highest.label;
+            
+            // 出拳瞬間觸發
+            if (oldPose === "Idle" && currentPose !== "Idle" && !isPunchCooldown) {
+                checkHit(currentPose);
+                isPunchCooldown = true;
+                setTimeout(() => { isPunchCooldown = false; }, 350);
+            }
+        }
+    }
+    // 繼續下一幀的辨識
+    classifyVideo();
+}
+
+function draw() {
+    background(15, 23, 42);
+    if (!isLoaded) return;
+
+    // 1. 繪製鏡頭畫面（角落、半透明、鏡像）
+    push();
+    translate(width, 0);
+    scale(-1, 1);
+    drawingContext.globalAlpha = 0.25;
+    image(video, 15, 15, 160, 120);
+    drawingContext.globalAlpha = 1.0;
+    pop();
+    
+    noFill(); stroke(255, 50); strokeWeight(2); rect(15, 15, 160, 120, 8);
+
+    // 2. 判定線與判定點
+    stroke(255, 30); strokeWeight(4); line(0, targetY, width, targetY);
+    
+    fill(56, 189, 248, currentPose === "Left_Punch" ? 180 : 60);
+    stroke(56, 189, 248); ellipse(width * 0.25, targetY, 80, 80);
+    
+    fill(244, 63, 94, currentPose === "Right_Punch" ? 180 : 60);
+    stroke(244, 63, 94); ellipse(width * 0.75, targetY, 80, 80);
+
+    // 3. 氣球邏輯
+    spawnTimer++;
+    if (spawnTimer % 50 === 0) {
+        let isLeft = random() > 0.5;
+        notes.push({
+            x: isLeft ? width * 0.25 : width * 0.75,
+            y: -20,
+            type: isLeft ? "Left_Punch" : "Right_Punch",
+            speed: random(5, 8),
+            size: 55,
+            active: true
+        });
+    }
+
+    for (let i = notes.length - 1; i >= 0; i--) {
+        let note = notes[i]; note.y += note.speed;
+        if (note.active) {
+            noStroke();
+            fill(note.type === "Left_Punch" ? color(56, 189, 248) : color(244, 63, 94));
+            ellipse(note.x, note.y, note.size, note.size * 1.1);
+        }
+        if (note.y > height + 50) notes.splice(i, 1);
+    }
+
+    // 4. 特效粒子
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i]; p.x += p.vx; p.y += p.vy; p.alpha -= 8;
+        fill(p.color.levels[0], p.color.levels[1], p.color.levels[2], p.alpha); noStroke();
+        ellipse(p.x, p.y, p.size);
+        if (p.alpha <= 0) particles.splice(i, 1);
+    }
+
+    // 5. UI 介面
+    noStroke(); fill(30, 41, 59, 200); rect(width - 160, 15, 140, 50, 10);
+    fill(255); textSize(22); textAlign(CENTER, CENTER); text(`得分: ${score}`, width - 90, 40);
+
+    fill(30, 41, 59, 200); rect(width/2 - 130, 15, 260, 50, 10);
+    textAlign(CENTER, CENTER); textSize(18);
+    if (currentPose === "Idle") { fill(148, 163, 184); text(`🧘 預備中...`, width / 2, 40); } 
+    else { fill(253, 224, 71); text(`🔥 擊打！ [ ${currentPose === 'Left_Punch' ? '左拳' : '右拳'} ]`, width / 2, 40); }
+}
+
+function checkHit(punchType) {
+    for (let note of notes) {
+        if (note.active && note.type === punchType) {
+            let distance = abs(note.y - targetY);
+            if (distance < 60) {
+                score += 10; note.active = false;
+                let pColor = punchType === "Left_Punch" ? color(56, 189, 248) : color(244, 63, 94);
+                explode(note.x, note.y, pColor); break;
+            }
+        }
+    }
+}
+
+function explode(x, y, pColor) {
+    for (let i = 0; i < 15; i++) {
+        particles.push({ x: x, y: y, vx: random(-5, 5), vy: random(-5, 5), size: random(5, 12), color: pColor, alpha: 255 });
+    }
+}
+
+function windowResized() {
+    let canvasWidth = Math.min(window.innerWidth * 0
