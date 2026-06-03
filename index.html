@@ -1,166 +1,136 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8" />
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 肩推能量塔 - 健身小遊戲</title>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
-    
+    <title>AI 肩推計數器</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.0/p5.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/ml5@0.12.2/dist/ml5.min.js"></script>
     <style>
         body {
-            background: linear-gradient(135deg, #020617 0%, #0f172a 100%);
-            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
-            margin: 0; display: flex; justify-content: center; align-items: center; min-height: 100vh; color: #fff;
+            margin: 0;
+            padding: 0;
+            background-color: #1a1a1a;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        #canvas-container {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            border-radius: 12px;
             overflow: hidden;
         }
-
-        main {
-            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px);
-            padding: 25px; border-radius: 30px; box-shadow: 0 25px 50px rgba(0,0,0,0.6); width: 90%; max-width: 400px;
-            text-align: center; border: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        h1 { font-size: 1.3rem; color: #38bdf8; text-transform: uppercase; letter-spacing: 2px; margin: 0 0 15px 0; }
-
-        button {
-            background: linear-gradient(135deg, #38bdf8 0%, #0369a1 100%); color: #fff; border: none;
-            padding: 16px; font-size: 1.1rem; font-weight: 800; border-radius: 15px; cursor: pointer; width: 100%; margin-bottom: 15px;
-            box-shadow: 0 10px 20px rgba(56, 189, 248, 0.2); transition: transform 0.1s;
-        }
-        button:active { transform: scale(0.98); }
-
-        #status { font-size: 13px; color: #94a3b8; margin-bottom: 15px; font-weight: 600; }
-
-        /* 頂部能量狀態提示框 */
-        #energy-box {
-            margin-bottom: 15px; padding: 12px; border-radius: 15px; font-size: 1.4rem; font-weight: 900;
-            background: #020617; border: 2px solid #1e293b; transition: all 0.2s;
-        }
-
-        .canvas-container { position: relative; border-radius: 20px; overflow: hidden; border: 3px solid #1e293b; background: #000; aspect-ratio: 1; }
-        canvas { width: 100%; height: 100%; }
-
-        #score-display { font-size: 4.5rem; margin: 5px 0; color: #22c55e; font-weight: 900; text-shadow: 0 0 20px rgba(34, 197, 94, 0.3); }
-
-        #label-container { font-size: 14px; background: rgba(255, 255, 255, 0.03); padding: 15px; border-radius: 15px; }
     </style>
 </head>
 <body>
 
-    <main>
-        <h1>Shoulder Press AI</h1>
-        <button type="button" onclick="init()">START WORKOUT</button>
-        <div id="status">Ready</div>
-        
-        <div id="energy-box" style="color: #64748b;">蓄勢待發...</div>
+<div id="canvas-container"></div>
 
-        <div class="canvas-container">
-            <canvas id="canvas"></canvas>
-        </div>
+<script>
+// === 請在此處貼上你在 Teachable Machine 訓練好的模型網址 ===
+const URL = "https://teachablemachine.withgoogle.com/models/YOUR_MODEL_ID/"; 
 
-        <div style="margin-top: 15px;">
-            <div style="font-size: 0.75rem; color: #64748b; font-weight: bold; letter-spacing: 1px;">POWER COUNTER</div>
-            <h2 id="score-display">0</h2>
-            
-            <div id="label-container">點擊按鈕，解鎖 iPad 鏡頭！</div>
-        </div>
-    </main>
+let video;
+let classifier;
+let label = "等待模型載入...";
+let confidence = 0;
 
-    <script>
-        // ⚠️ 請在錄製好 Teachable Machine 模型後，把這裡換成你的新網址！
-        // 確保你的類別名稱（Classes）叫做 press_up 和 press_down
-        const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/";
+// --- 計數邏輯變數 ---
+let repCount = 0;         // 肩推總下數
+let hasPressed = false;   // 標記：使用者是否已經把手推高了？
+let threshold = 0.85;     // 信心度門檻（需達到 85% 以上才認定該動作成立）
 
-        let model, webcam, ctx, maxPredictions;
-        let score = 0;
+function preload() {
+    // 分類器載入模型
+    classifier = ml5.imageClassifier(URL + 'model.json');
+}
 
-        async function init() {
-            document.getElementById("status").innerText = "正在啟動 iPad 攝像頭...";
-            try {
-                const size = 400;
-                // 使用原汁原味你一開始在 iPad 上開成功的相機初始化程式碼
-                webcam = new tmPose.Webcam(size, size, true); 
-                await webcam.setup(); 
-                await webcam.play();
-                
-                document.getElementById("status").innerText = "正在加載肩推 AI 模型...";
-                model = await tmPose.load(URL + "model.json", URL + "metadata.json");
-                maxPredictions = model.getTotalClasses();
+function setup() {
+    // 配合 iPad 螢幕，採用 4:3 比例 (640x480)
+    let canvas = createCanvas(640, 480);
+    canvas.parent('canvas-container');
 
-                const canvas = document.getElementById("canvas");
-                canvas.width = size; canvas.height = size;
-                ctx = canvas.getContext("2d");
+    // 建立視訊鏡頭，並設定適合 iPad 的 constraints
+    let constraints = {
+        video: {
+            facingMode: "user", // 使用前鏡頭
+            width: 640,
+            height: 480
+        },
+        audio: false
+    };
+    
+    video = createCapture(constraints, function(stream) {
+        console.log("鏡頭啟動成功");
+    });
+    video.size(640, 480);
+    video.hide(); // 隱藏原生 HTML 標籤，我們要在 Canvas 上畫出來
 
-                document.getElementById("status").innerText = "偵測中... 開始挺胸肩推！";
-                window.requestAnimationFrame(loop);
-            } catch (e) {
-                document.getElementById("status").innerText = "錯誤: 相機啟動失敗";
-                alert("相機被鎖死！請完全滑掉關閉 Safari App，重開無痕視窗再試一次。");
-            }
-        }
+    // 開始進行 AI 影像分類
+    classifyVideo();
+}
 
-        async function loop() {
-            if (webcam) {
-                webcam.update(); 
-                await predict();
-            }
-            window.requestAnimationFrame(loop);
-        }
+function draw() {
+    // 1. 畫出鏡頭畫面（左右反轉，像照鏡子一樣比較直覺）
+    translate(width, 0);
+    scale(-1, 1);
+    image(video, 0, 0, width, height);
+    
+    // 還原座標系，方便畫文字與 UI
+    translate(width, 0);
+    scale(-1, 1);
 
-        async function predict() {
-            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
-            const prediction = await model.predict(posenetOutput);
+    // 2. 畫出半透明遮罩與 UI 介面
+    noStroke();
+    fill(0, 0, 0, 100);
+    rect(0, 0, width, 80);
 
-            if (pose && webcam.canvas) {
-                ctx.drawImage(webcam.canvas, 0, 0);
-                tmPose.drawKeypoints(pose.keypoints, 0.5, ctx);
-                tmPose.drawSkeleton(pose.keypoints, 0.5, ctx);
-            }
+    // 3. 顯示目前偵測到的狀態
+    textAlign(LEFT, CENTER);
+    textSize(20);
+    fill(255);
+    text("目前動作: " + translateLabel(label) + " (" + floor(confidence * 100) + "%)", 20, 40);
 
-            let pressUpProb = 0;
-            let pressDownProb = 0;
+    // 4. 巨大且明顯的計數器顯示
+    textAlign(RIGHT, CENTER);
+    textSize(48);
+    fill(255, 215, 0); // 金黃色
+    text(repCount + " 下", width - 20, 40);
 
-            // 搜尋抓取你錄製的肩推標籤
-            for (let i = 0; i < maxPredictions; i++) {
-                if (prediction[i].className === "press_up") pressUpProb = prediction[i].probability;
-                if (prediction[i].className === "press_down") pressDownProb = prediction[i].probability;
-            }
+    // 5. 畫面視覺回饋：如果已經推高，顯示提示
+    if (hasPressed) {
+        textAlign(CENTER, CENTER);
+        textSize(32);
+        fill(0, 255, 127); // 春綠色
+        text("很好！請確實放下雙手", width / 2, height - 50);
+    }
+}
 
-            let upPercent = (pressUpProb * 100).toFixed(0);
-            let downPercent = (pressDownProb * 100).toFixed(0);
+// 轉換標籤成中文，讓畫面更好看
+function translateLabel(engLabel) {
+    if (engLabel === "rest") return "準備/放下";
+    if (engLabel === "press") return "推高";
+    if (engLabel === "background") return "無人/雜訊";
+    return engLabel;
+}
 
-            // 📊 實時顯示百分比條（讓用戶清楚自己手有沒有伸直）
-            document.getElementById("label-container").innerHTML = `
-                <div style="margin-bottom: 8px; text-align: left;">
-                    <span style="color: #38bdf8; font-weight: bold;">🙌 頂峰推起 (press_up): ${upPercent}%</span> 
-                    <div style="background: #1e293b; width: 100%; height: 6px; border-radius: 3px; margin-top: 4px; overflow: hidden;">
-                        <div style="background: #38bdf8; width: ${upPercent}%; height: 100%;"></div>
-                    </div>
-                </div>
-                <div style="text-align: left;">
-                    <span style="color: #94a3b8; font-weight: bold;">👇 底部準備 (press_down): ${downPercent}%</span>
-                    <div style="background: #1e293b; width: 100%; height: 6px; border-radius: 3px; margin-top: 4px; overflow: hidden;">
-                        <div style="background: #64748b; width: ${downPercent}%; height: 100%;"></div>
-                    </div>
-                </div>
-            `;
+// 核心 AI 分類與計數邏輯
+function classifyVideo() {
+    classifier.classify(video, gotResult);
+}
 
-            const energyBox = document.getElementById("energy-box");
+function gotResult(error, results) {
+    if (error) {
+        console.error(error);
+        return;
+    }
+    
+    // 取得最高信心的分類結果
+    label = results[0].label;
+    confidence = results[0].confidence;
 
-            // 🚀 計分邏輯：只要頂峰推起超過 70% 門檻，能量箱發光，並且無上限連續跳分！
-            if (pressUpProb >= 0.70) {
-                score++;
-                document.getElementById("score-display").innerText = score;
-                energyBox.innerText = "⚡ 能量輸出中！ ⚡";
-                energyBox.style.borderColor = "#22c55e";
-                energyBox.style.color = "#22c55e";
-            } else {
-                energyBox.innerText = "🔋 充能準備...";
-                energyBox.style.borderColor = "#1e293b";
-                energyBox.style.color = "#64748b";
-            }
-        }
-    </script>
-</body>
-</html>
+    // === 核心計數狀態機邏輯 ===
+    if (confidence > threshold)
