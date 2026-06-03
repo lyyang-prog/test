@@ -1,218 +1,364 @@
 <!DOCTYPE html>
 <html lang="zh-TW">
 <head>
-    <meta charset="UTF-8">
+    <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI 節奏打擊王 - iPad 終極相容版</title>
-    
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.6.0/p5.js"></script>
+    <title>AI 節奏打擊王 - 中文模型專屬版</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
     
     <style>
-        body { margin: 0; padding: 0; background-color: #0f172a; display: flex; justify-content: center; align-items: center; height: 100vh; overflow: hidden; font-family: sans-serif; touch-action: none; }
-        #canvas-container { position: relative; box-shadow: 0 20px 40px rgba(0,0,0,0.6); border-radius: 16px; overflow: hidden; }
-        #status-overlay {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(30, 41, 59, 0.9); color: white; padding: 10px 20px;
-            border-radius: 30px; font-size: 16px; font-weight: bold; z-index: 999;
-            border: 1px solid rgba(255,255,255,0.1); pointer-events: none;
+        body {
+            background-color: #0f172a; 
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            touch-action: none;
+        }
+
+        main {
+            width: 90%;
+            max-width: 450px;
+            text-align: center;
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 30px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        }
+
+        h1 {
+            font-size: 1.6rem;
+            color: #22d3ee; 
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin: 0 0 15px 0;
+        }
+
+        button {
+            width: 100%;
+            padding: 18px;
+            background: linear-gradient(135deg, #22d3ee 0%, #0ea5e9 100%);
+            color: #0f172a;
+            border: none;
+            border-radius: 15px;
+            font-size: 1.2rem;
+            font-weight: 800;
+            cursor: pointer;
+            box-shadow: 0 10px 15px -3px rgba(34, 211, 238, 0.3);
+            margin-bottom: 15px;
+            transition: transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        #status {
+            font-size: 0.9rem;
+            color: #38bdf8;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            font-weight: bold;
+            height: 20px;
+        }
+
+        .canvas-container {
+            width: 100%;
+            aspect-ratio: 4 / 3; 
+            background: #000;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 3px solid #0ea5e9;
+            box-shadow: 0 0 20px rgba(14, 165, 233, 0.4);
+            line-height: 0;
+            position: relative;
+        }
+
+        canvas {
+            width: 100%;
+            height: 100%;
+        }
+
+        .score-card {
+            margin-top: 15px;
+            background: #0f172a;
+            padding: 12px;
+            border-radius: 20px;
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+        }
+
+        .score-box {
+            text-align: center;
+        }
+
+        .label {
+            font-size: 0.75rem;
+            color: #64748b;
+            letter-spacing: 1px;
+        }
+
+        #score-display {
+            font-size: 2.5rem;
+            margin: 5px 0 0 0;
+            color: #4ade80; 
+            font-weight: 900;
+        }
+
+        #label-container {
+            font-size: 1.1rem;
+            color: #22d3ee;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
+    <main>
+        <h1>AI Rhythm Boxer</h1>
+        <button type="button" id="start-btn" onclick="init()">START GAME</button>
+        <div id="status">Ready to Fight</div>
+        
+        <div class="canvas-container">
+            <canvas id="canvas"></canvas>
+        </div>
 
-    <div id="status-overlay">系統狀態：正在準備畫布...</div>
-    <div id="canvas-container"></div>
+        <div class="score-card">
+            <div class="score-box">
+                <div class="label">SCORE</div>
+                <h2 id="score-display">0</h2>
+            </div>
+            <div class="score-box">
+                <div class="label">AI POSE</div>
+                <div id="label-container">Waiting...</div>
+            </div>
+        </div>
+    </main>
 
 <script>
-const MODEL_URL = "https://teachablemachine.withgoogle.com/models/Bcp6i6fs_/"; 
+// 你的 Teachable Machine 模型網址
+const URL = "https://teachablemachine.withgoogle.com/models/Bcp6i6fs_/";
 
-let model, webcam, maxPredictions;
-let currentPose = "Idle";
-let isAILoaded = false;
+let model, webcam, ctx, maxPredictions;
 
-// 遊戲變數
+// 遊戲邏輯核心變數
 let score = 0;
-let notes = [];
-let particles = [];
-let targetY;
-let spawnTimer = 0;
+let lastStatus = "準備"; // 預設狀態改為你的中文標籤
 let isPunchCooldown = false;
+let isGameRunning = false;
 
-function setup() {
-    updateStatus("正在建立網頁畫布...");
-    let canvasWidth = Math.min(window.innerWidth * 0.95, 800);
-    let canvasHeight = canvasWidth * (3 / 4); 
-    let canvas = createCanvas(canvasWidth, canvasHeight);
-    canvas.parent('canvas-container');
+let notes = [];       
+let particles = [];   
+let targetY;          
+let spawnTimer = 0;
+
+async function init() {
+    const startBtn = document.getElementById("start-btn");
+    const statusDiv = document.getElementById("status");
     
-    targetY = height * 0.75;
-    startAI(); // 啟動 AI 載入程序
-}
+    startBtn.style.display = "none"; 
+    statusDiv.innerText = "正在啟動 iPad 攝像頭...";
 
-async function startAI() {
-    updateStatus("正在下載 Google AI 模型...");
+    const modelURL = URL + "model.json";
+    const metadataURL = URL + "metadata.json";
+
     try {
-        model = await tmPose.load(MODEL_URL + "model.json", MODEL_URL + "metadata.json");
-        maxPredictions = model.getTotalClasses();
+        const size = 400;
+        const flip = true; 
+        webcam = new tmPose.Webcam(size, size, flip); 
         
-        updateStatus("模型下載成功！正在喚醒 iPad 前鏡頭...");
-        
-        // --- iPad Safari 相容性優化核心開始 ---
-        // 增強初始化參數設定
-        const streamConstraints = {
-            video: {
-                facingMode: 'user', // 強制使用前置鏡頭
-                width: { ideal: 320 }, // 設定理想解析度，避免硬體自動選高解析導致卡死
-                height: { ideal: 240 }
-            },
-            audio: false // 不需要音訊
-        };
-
-        // 建立 Webcam 物件，並傳入優化過的Constraints
-        webcam = new tmPose.Webcam(320, 240, true);
-        await webcam.setup({ facingMode: "user" }); // TeachableMachine 的 setup 需要facingMode參數
-        // --- iPad Safari 相容性優化核心結束 ---
-
+        await webcam.setup({ facingMode: "user" }); 
         await webcam.play();
-        isAILoaded = true;
-        updateStatus("🎮 遊戲準備就緒！");
-        setTimeout(() => { document.getElementById('status-overlay').style.display = 'none'; }, 2000);
         
-    } catch (error) {
-        console.error(error);
-        // 增強錯誤回報，顯示更多資訊
-        let errorMsg = error.message;
-        if (!errorMsg) errorMsg = JSON.stringify(error) || "可能是鏡頭權限被拒絕或是未知硬體問題。";
-        updateStatus("❌ 發生錯誤：" + errorMsg);
+        statusDiv.innerText = "相機已就緒，正在加載 AI 模型...";
+
+        // 載入模型
+        model = await tmPose.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        // 設定原生畫布
+        const canvas = document.getElementById("canvas");
+        canvas.width = 400;
+        canvas.height = 300;
+        ctx = canvas.getContext("2d");
+        
+        targetY = canvas.height * 0.75; 
+
+        statusDiv.innerText = "🔥 戰鬥開始！請出拳！";
+        isGameRunning = true;
+        
+        window.requestAnimationFrame(gameLoop);
+    } catch (e) {
+        console.error(e);
+        statusDiv.innerText = "錯誤: 無法開啟相機或載入模型。";
+        startBtn.style.display = "block";
     }
 }
 
-function updateStatus(msg) {
-    document.getElementById('status-overlay').innerText = msg;
+async function gameLoop(timestamp) {
+    if (!isGameRunning) return;
+
+    webcam.update(); 
+    await predict(); 
+    drawGame();      
+    
+    window.requestAnimationFrame(gameLoop);
 }
 
-function draw() {
-    background(15, 23, 42); 
+async function predict() {
+    const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+    const prediction = await model.predict(posenetOutput);
 
-    if (!isAILoaded) {
-        fill(255, 150);
-        textSize(20);
-        textAlign(CENTER, CENTER);
-        text("⚙️ 正在努力連線硬體中，請稍候...", width / 2, height / 2);
-        return; // 攔截，直到 AI 準備就緒
+    // 找出目前最高機率的動作
+    let highestPred = "準備";
+    let highestVal = 0;
+    for (let i = 0; i < maxPredictions; i++) {
+        if (prediction[i].probability > highestVal) {
+            highestVal = prediction[i].probability;
+            highestPred = prediction[i].className;
+        }
     }
 
-    // ========== AI 載入成功後的遊戲代碼 ==========
-    
-    webcam.update();
-    predictPose(); // 分離預測函式
+    // 更新右下角 AI POSE 狀態顯示
+    const labelContainer = document.getElementById("label-container");
+    let emoji = highestPred === "準備" ? "🧘 準備" : (highestPred === "左揮拳" ? "🥊 左拳" : "🥊 右拳");
+    labelContainer.innerText = `${emoji} (${(highestVal * 100).toFixed(0)}%)`;
 
-    // 渲染攝影機畫面
-    push();
-    translate(width, 0); scale(-1, 1);
-    if (webcam.canvas) {
-        drawingContext.globalAlpha = 0.25;
-        drawingContext.drawImage(webcam.canvas, 15, 15, 160, 120);
-        drawingContext.globalAlpha = 1.0;
+    // 判定出拳觸發 (必須是從「準備」變成出拳，且不在冷卻中)
+    if (highestVal > 0.80) {
+        let oldStatus = lastStatus;
+        lastStatus = highestPred;
+
+        if (oldStatus === "準備" && lastStatus !== "準備" && !isPunchCooldown) {
+            checkHit(lastStatus); // 傳入「左揮拳」或「右揮拳」進行打擊判定
+            isPunchCooldown = true;
+            setTimeout(() => { isPunchCooldown = false; }, 350); 
+        }
     }
-    pop();
-    noFill(); stroke(255, 50); strokeWeight(2); rect(15, 15, 160, 120, 8);
+}
 
-    // 判定線與判定點
-    stroke(255, 30); strokeWeight(4); line(0, targetY, width, targetY);
-    
-    fill(56, 189, 248, currentPose === "Left_Punch" ? 180 : 60);
-    stroke(56, 189, 248); ellipse(width * 0.25, targetY, 80, 80);
-    
-    fill(244, 63, 94, currentPose === "Right_Punch" ? 180 : 60);
-    stroke(244, 63, 94); ellipse(width * 0.75, targetY, 80, 80);
+function drawGame() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(webcam.canvas, 0, 0, canvas.width, canvas.height);
 
-    // 氣球生成與移動
+    // 畫打擊判定線
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(0, targetY);
+    ctx.lineTo(canvas.width, targetY);
+    ctx.stroke();
+
+    // 左打擊點 (藍色) -> 對應 左揮拳
+    ctx.fillStyle = lastStatus === "左揮拳" ? "rgba(34, 211, 238, 0.7)" : "rgba(34, 211, 238, 0.2)";
+    ctx.strokeStyle = "#22d3ee";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(canvas.width * 0.25, targetY, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 右打擊點 (紅色) -> 對應 右揮拳
+    ctx.fillStyle = lastStatus === "右揮拳" ? "rgba(244, 63, 94, 0.7)" : "rgba(244, 63, 94, 0.2)";
+    ctx.strokeStyle = "#f43f5e";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(canvas.width * 0.75, targetY, 30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // 氣球生成邏輯
     spawnTimer++;
-    if (spawnTimer % 50 === 0) {
-        let isLeft = random() > 0.5;
-        notes.push({ x: isLeft ? width * 0.25 : width * 0.75, y: -20, type: isLeft ? "Left_Punch" : "Right_Punch", speed: random(5, 8), active: true });
+    if (spawnTimer % 45 === 0) { 
+        let isLeft = Math.random() > 0.5;
+        notes.push({
+            x: isLeft ? canvas.width * 0.25 : canvas.width * 0.75,
+            y: -20,
+            type: isLeft ? "左揮拳" : "右揮拳", // 氣球類型也對應中文
+            speed: 4 + Math.random() * 3,
+            active: true
+        });
     }
 
+    // 繪製與更新氣球
     for (let i = notes.length - 1; i >= 0; i--) {
-        let note = notes[i]; note.y += note.speed;
+        let note = notes[i];
+        note.y += note.speed; 
+
         if (note.active) {
-            noStroke();
-            fill(note.type === "Left_Punch" ? color(56, 189, 248) : color(244, 63, 94));
-            ellipse(note.x, note.y, 55, 60);
+            ctx.fillStyle = note.type === "左揮拳" ? "#22d3ee" : "#f43f5e";
+            ctx.beginPath();
+            ctx.ellipse(note.x, note.y, 20, 24, 0, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.strokeStyle = "rgba(255,255,255,0.5)";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.moveTo(note.x, note.y + 24);
+            ctx.lineTo(note.x, note.y + 36);
+            ctx.stroke();
         }
-        if (note.y > height + 50) notes.splice(i, 1);
+
+        if (note.y > canvas.height + 40) {
+            notes.splice(i, 1);
+        }
     }
 
-    // 爆炸粒子
+    // 繪製與更新碎裂粒子
     for (let i = particles.length - 1; i >= 0; i--) {
-        let p = particles[i]; p.x += p.vx; p.y += p.vy; p.alpha -= 8;
-        fill(p.color.levels[0], p.color.levels[1], p.color.levels[2], p.alpha); noStroke();
-        ellipse(p.x, p.y, p.size);
-        if (p.alpha <= 0) particles.splice(i, 1);
-    }
+        let p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.alpha -= 0.05; 
 
-    // 計分板
-    noStroke(); fill(30, 41, 59, 200); rect(width - 160, 15, 140, 50, 10);
-    fill(255); textSize(22); textAlign(CENTER, CENTER); text(`得分: ${score}`, width - 90, 40);
-
-    fill(30, 41, 59, 200); rect(width/2 - 130, 15, 260, 50, 10);
-    textAlign(CENTER, CENTER); textSize(18);
-    if (currentPose === "Idle") { fill(148, 163, 184); text(`🧘 預備中...`, width / 2, 40); } 
-    else { fill(253, 224, 71); text(`🔥 擊打！ [ ${currentPose === 'Left_Punch' ? '左拳' : '右拳'} ]`, width / 2, 40); }
-}
-
-async function predictPose() {
-    // 檢查是否有鏡頭畫面
-    if (webcam.canvas && isAILoaded) {
-        const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
-        const prediction = await model.predict(posenetOutput);
-
-        let highestPred = "Idle";
-        let highestVal = 0;
-        for (let i = 0; i < maxPredictions; i++) {
-            if (prediction[i].probability > highestVal) {
-                highestVal = prediction[i].probability;
-                highestPred = prediction[i].className;
-            }
+        if (p.alpha <= 0) {
+            particles.splice(i, 1);
+            continue;
         }
 
-        if (highestVal > 0.80) {
-            let oldPose = currentPose;
-            currentPose = highestPred;
-            if (oldPose === "Idle" && currentPose !== "Idle" && !isPunchCooldown) {
-                checkHit(currentPose); 
-                isPunchCooldown = true;
-                setTimeout(() => { isPunchCooldown = false; }, 350); 
-            }
-        }
+        ctx.fillStyle = p.color === "left" ? `rgba(34, 211, 238, ${p.alpha})` : `rgba(244, 63, 94, ${p.alpha})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
     }
 }
 
+// 精準擊打判定
 function checkHit(punchType) {
     for (let note of notes) {
         if (note.active && note.type === punchType) {
-            let distance = abs(note.y - targetY);
-            if (distance < 60) {
-                score += 10; note.active = false;
-                let pColor = punchType === "Left_Punch" ? color(56, 189, 248) : color(244, 63, 94);
-                explode(note.x, note.y, pColor); break;
+            let distance = Math.abs(note.y - targetY);
+            
+            if (distance < 45) {
+                score += 10;
+                note.active = false; 
+                document.getElementById("score-display").innerText = score;
+                
+                createExplosion(note.x, note.y, punchType === "左揮拳" ? "left" : "right");
+                break;
             }
         }
     }
 }
 
-function explode(x, y, pColor) {
-    for (let i = 0; i < 15; i++) {
-        particles.push({ x: x, y: y, vx: random(-5, 5), vy: random(-5, 5), size: random(5, 12), color: pColor, alpha: 255 });
+// 產生爆炸碎屑
+function createExplosion(x, y, side) {
+    for (let i = 0; i < 12; i++) {
+        particles.push({
+            x: x,
+            y: y,
+            vx: (Math.random() - 0.5) * 6,
+            vy: (Math.random() - 0.5) * 6,
+            size: 2 + Math.random() * 4,
+            color: side,
+            alpha: 1.0
+        });
     }
-}
-
-function windowResized() {
-    let canvasWidth = Math.min(window.innerWidth * 0.95, 800);
-    let canvasHeight = canvasWidth * (3 / 4); resizeCanvas(canvasWidth, canvasHeight); targetY = height * 0.75;
 }
 </script>
 </body>
