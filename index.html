@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>AI 體感運動遊戲</title>
   
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@latest/dist/teachablemachine-pose.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
   
   <link rel="stylesheet" href="styles.css" />
 </head>
@@ -20,7 +20,8 @@
     <div id="status">等待指令中...</div>
     
     <div class="canvas-container">
-      <canvas id="canvas"></canvas>
+      <video id="video" width="400" height="400" autoplay playsinline muted style="display:none;"></video>
+      <canvas id="canvas" width="400" height="400"></canvas>
     </div>
 
     <div id="label-container"></div>
@@ -32,10 +33,11 @@
   </main>
 
   <script>
-    // 換回你指定的 Class 3 大腦網址
+    // 你的 Class 3 大腦網址
     const URL = "https://teachablemachine.withgoogle.com/models/t5_tFFFbI/";
 
-    let model, webcam, ctx, labelContainer, maxPredictions;
+    let model, ctx, labelContainer, maxPredictions;
+    let video, canvas;
     let score = 0;
     let canScore = true; 
 
@@ -47,87 +49,78 @@
         const metadataURL = URL + "metadata.json";
 
         try {
-            const size = 400;
-            const flip = true; 
-            webcam = new tmPose.Webcam(size, size, flip); 
+            video = document.getElementById("video");
+            canvas = document.getElementById("canvas");
+            ctx = canvas.getContext("2d");
+
+            // 1. 使用你之前成功專案的純原生相機請求
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: { facingMode: "user", width: 400, height: 400 },
+                audio: false
+            });
             
-            // 請求相機並破解 iPad 凍結限制
-            await webcam.setup({ facingMode: "user" }); 
-            if (webcam.webcam) {
-                webcam.webcam.setAttribute('playsinline', true);
-                webcam.webcam.setAttribute('muted', true);
-                webcam.webcam.muted = true;
-            }
-            await webcam.play();
+            video.srcObject = stream;
+            // 這裡必須加上 play()
+            await video.play();
+            
             statusDiv.innerText = "相機已就緒，正在加載模型...";
 
-            // 載入模型
+            // 2. 載入模型
             model = await tmPose.load(modelURL, metadataURL);
             maxPredictions = model.getTotalClasses();
-
-            const canvas = document.getElementById("canvas");
-            canvas.width = size;
-            canvas.height = size;
-            ctx = canvas.getContext("2d");
 
             statusDiv.innerText = "偵測中... 請開始動作！";
             window.requestAnimationFrame(loop);
         } catch (e) {
             console.error(e);
-            statusDiv.innerText = "錯誤: 無法開啟相機或載入模型。";
+            // 如果出錯，把真正的錯誤訊息吐在網頁上，方便我們抓鬼
+            statusDiv.innerText = "錯誤訊息: " + e.message;
         }
     }
 
     async function loop(timestamp) {
-        webcam.update(); 
-        await predict();
-        window.requestAnimationFrame(loop);
-    }
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+            // 把相機畫面畫到畫布上
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // AI 預測
+            const { pose, posenetOutput } = await model.estimatePose(video);
+            const prediction = await model.predict(posenetOutput);
 
-    async function predict() {
-        const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
-        const prediction = await model.predict(posenetOutput);
+            let statusHTML = "";
+            for (let i = 0; i < maxPredictions; i++) {
+                const className = prediction[i].className;
+                const probability = prediction[i].probability;
 
-        if (pose) {
-            drawPose(pose);
-        }
+                statusHTML += `
+                    <div class="prediction-row">
+                        <span class="class-name">${className}</span>
+                        <span class="class-bar-bg">
+                            <span class="class-bar-fill" style="width: ${(probability * 100)}%"></span>
+                        </span>
+                        <span class="class-pct">${(probability * 100).toFixed(0)}%</span>
+                    </div>
+                `;
 
-        let statusHTML = "";
-        for (let i = 0; i < maxPredictions; i++) {
-            const className = prediction[i].className;
-            const probability = prediction[i].probability;
-
-            statusHTML += `
-                <div class="prediction-row">
-                    <span class="class-name">${className}</span>
-                    <span class="class-bar-bg">
-                        <span class="class-bar-fill" style="width: ${(probability * 100)}%"></span>
-                    </span>
-                    <span class="class-pct">${(probability * 100).toFixed(0)}%</span>
-                </div>
-            `;
-
-            // 當 Class 3 大於 70% 且不在冷卻時間
-            if (className === "Class 3" && probability > 0.70 && canScore) {
-                score += 1; 
-                document.getElementById("score-display").innerText = score;
-                
-                canScore = false;
-                setTimeout(() => { canScore = true; }, 1000); 
+                // Class 3 大於 70% 且不在冷卻時間就加分
+                if (className === "Class 3" && probability > 0.70 && canScore) {
+                    score += 1; 
+                    document.getElementById("score-display").innerText = score;
+                    
+                    canScore = false;
+                    setTimeout(() => { canScore = true; }, 1000); 
+                }
             }
-        }
-        document.getElementById("label-container").innerHTML = statusHTML;
-    }
+            document.getElementById("label-container").innerHTML = statusHTML;
 
-    function drawPose(pose) {
-        if (webcam.canvas) {
-            ctx.drawImage(webcam.canvas, 0, 0);
+            // 畫出骨架
             if (pose) {
                 const minPartConfidence = 0.5;
                 tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
                 tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
             }
         }
+        window.requestAnimationFrame(loop);
     }
   </script>
 </body>
