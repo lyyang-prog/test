@@ -1,132 +1,161 @@
-/* 全域設定：換成充滿電競、運動感的深色背景 */
 body {
-  background-color: #0b0f19;
-  background-image: radial-gradient(
-    circle at 50% 50%,
-    #1a233a 0%,
-    #0b0f19 100%
-  );
+  background-color: #080c14;
+  background-image: radial-gradient(circle at 50% 30%, #131a2e 0%, #080c14 100%);
   margin: 0;
-  padding: 0;
+  padding: 15px;
   display: flex;
   justify-content: center;
   align-items: center;
   min-height: 100vh;
-  font-family: 'Impact', 'Arial Black', sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   color: #ffffff;
+  box-sizing: border-box;
 }
 
-/* 遊戲主卡片：科技感黑框加上霓虹光暈 */
 main {
-  background: rgba(20, 27, 45, 0.85);
-  padding: 30px;
+  background: rgba(16, 23, 41, 0.9);
+  padding: 25px;
   border-radius: 24px;
   border: 2px solid #00ff88;
-  box-shadow: 0 0 30px rgba(0, 255, 136, 0.2);
+  box-shadow: 0 0 30px rgba(0, 255, 136, 0.15);
   max-width: 450px;
   width: 100%;
   text-align: center;
   backdrop-filter: blur(10px);
 }
 
-/* 遊戲大標題 */
 h1 {
-  font-size: 2.2rem;
+  font-size: 2rem;
+  margin: 0 0 10px 0;
   text-transform: uppercase;
-  letter-spacing: 2px;
-  margin-top: 0;
+  letter-spacing: 1px;
   background: linear-gradient(45deg, #00ff88, #00ffff);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  text-shadow: 0 0 10px rgba(0, 255, 136, 0.3);
 }
 
-/* 規則說明文字 */
 p {
-  font-family: sans-serif;
-  color: #8fa0dd;
-  font-size: 1rem;
-  margin-bottom: 20px;
+  color: #a0aec0;
+  font-size: 0.95rem;
+  margin: 0 0 20px 0;
 }
 
-/* 運動感大按鈕：螢光綠、斜切面感、強烈陰影 */
+p span {
+  color: #ff007f;
+  font-weight: bold;
+}
+
 button {
-  font-family: sans-serif;
   font-weight: bold;
   font-size: 1.1rem;
-  letter-spacing: 1px;
-  padding: 14px 28px;
+  padding: 12px 30px;
   cursor: pointer;
   background: linear-gradient(135deg, #00ff88 0%, #00bfff 100%);
   color: #050811;
   border: none;
   border-radius: 50px;
   box-shadow: 0 4px 15px rgba(0, 255, 136, 0.4);
-  transform: skewX(-5deg); /* 營造速度感的斜切效果 */
-  transition: all 0.3s ease;
+  transition: all 0.2s ease;
+  width: 80%;
+  margin-bottom: 15px;
 }
 
-button:hover {
-  background: linear-gradient(135deg, #00ffff 0%, #00ff88 100%) !important;
-  box-shadow: 0 6px 25px rgba(0, 255, 255, 0.6);
-  transform: skewX(-5deg) scale(1.05);
+button:active {
+  transform: scale(0.98);
 }
 
-/* 狀態提示字體 */
 #status {
-  font-family: sans-serif;
-  margin: 15px 0;
   color: #00ffff;
-  font-size: 0.95rem;
-  text-transform: uppercase;
+  font-size: 0.9rem;
+  margin-bottom: 15px;
+  font-weight: 500;
 }
 
-/* 攝像頭畫布：加上霓虹邊框與流線感 */
+/* 讓相機畫面在 iPad 上也能完整自適應 RWD */
+.canvas-container {
+  width: 100%;
+  max-width: 320px;
+  margin: 0 auto 15px auto;
+  aspect-ratio: 1 / 1;
+}
+
 #canvas {
-  border: 3px solid #1f2d4a;
+  width: 100%;
+  height: 100%;
+  border: 3px solid #1a243d;
   border-radius: 16px;
-  box-shadow: inset 0 0 20px rgba(0, 0, 0, 0.6);
-  background-color: #050811;
-  transition: border-color 0.3s;
+  background-color: #000;
+  box-sizing: border-box;
 }
 
-/* 當偵測中時，讓畫布亮起來 */
-#canvas:hover {
-  border-color: #00ffff;
-}
-
-/* 數據顯示區：像跑車儀表板的數字 */
+/* 數據顯示能量條排版 */
 #label-container {
-  font-family: monospace;
-  font-size: 1.1rem;
-  color: #ffeb3b;
-  background: rgba(0, 0, 0, 0.4);
-  padding: 10px;
-  border-radius: 8px;
-  margin: 15px 0;
-  border-left: 4px solid #ffeb3b;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 12px;
+  border-radius: 12px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+.prediction-row {
+  display: flex;
+  align-items: center;
+  margin: 6px 0;
+  font-size: 0.85rem;
+}
+
+.class-name {
+  width: 70px;
   text-align: left;
+  color: #e2e8f0;
 }
 
-/* 巨型計分板：動態呼吸發光效果 */
+.class-bar-bg {
+  flex: 1;
+  background: #1a202c;
+  height: 8px;
+  border-radius: 4px;
+  margin: 0 10px;
+  overflow: hidden;
+}
+
+.class-bar-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #ffeb3b, #ff9800);
+  border-radius: 4px;
+  transition: width 0.1s ease;
+}
+
+.class-pct {
+  width: 35px;
+  text-align: right;
+  color: #ffeb3b;
+  font-family: monospace;
+}
+
+/* 巨型運動計分板 */
+.score-box {
+  background: rgba(0, 255, 136, 0.05);
+  border: 1px solid rgba(0, 255, 136, 0.2);
+  padding: 10px;
+  border-radius: 16px;
+  display: inline-block;
+  min-width: 120px;
+}
+
 #score-display {
-  font-size: 4rem;
+  font-size: 3.5rem;
   color: #00ff88;
-  margin: 10px 0 0 0;
-  text-shadow: 0 0 20px rgba(0, 255, 136, 0.6);
-  font-style: italic; /* 斜體更有運動速度感 */
-  animation: pulse 1.5s infinite alternate;
+  margin: 0;
+  font-family: 'Impact', sans-serif;
+  text-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
+  line-height: 1;
 }
 
-/* 分數發光呼吸動畫 */
-@keyframes pulse {
-  from {
-    text-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
-    transform: scale(1);
-  }
-  to {
-    text-shadow: 0 0 25px rgba(0, 255, 136, 0.9),
-      0 0 40px rgba(0, 255, 136, 0.4);
-    transform: scale(1.03);
-  }
+.score-label {
+  font-size: 0.7rem;
+  color: #718096;
+  letter-spacing: 2px;
+  font-weight: bold;
 }
