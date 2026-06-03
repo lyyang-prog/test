@@ -1,5 +1,4 @@
 // 保留你最新的 Teachable Machine 模型網址
-const URL = "// 【換回你原本的 Class 3 大腦網址】
 const URL = "https://teachablemachine.withgoogle.com/models/t5_tFFFbI/";
 
 let model, webcam, ctx, labelContainer, maxPredictions;
