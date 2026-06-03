@@ -3,7 +3,10 @@ const URL = "https://teachablemachine.withgoogle.com/models/_qNCgNZbP/";
 
 let model, webcam, ctx, maxPredictions;
 let score = 0;
-let isReadyToScore = true; // 是否準備好可以得分（取代原本的 lastStatus）
+
+// 計時器：用來控制手舉著時，每隔多久跳一次分
+let scoreTimer = null; 
+let isHandUpNow = false; 
 
 // 運動激勵語錄庫
 const motivationalQuotes = [
@@ -11,7 +14,7 @@ const motivationalQuotes = [
     "再伸展多一點，你可以的！ 🔥",
     "運動讓大腦更清醒，繼續衝！ ⚡",
     "手舉得越高，能量就滿滿！ 💪",
-    "堅持住！下一分馬上就到！ 🚀"
+    "堅持住！能量正在瘋狂集氣！ 🚀"
 ];
 
 async function init() {
@@ -75,31 +78,6 @@ async function predict() {
 
     const labelContainer = document.getElementById("label-container");
 
-    // --- 🛠️ 終極修正：計時冷卻制 ---
-    // 如果 handup 超過 70% 且目前是處於可以得分的狀態
-    if (handupProbability >= 0.70 && isReadyToScore) {
-        score++;
-        document.getElementById("score-display").innerText = score;
-        labelContainer.innerHTML = "🎯 太棒了！得分！ 🎯";
-        
-        isReadyToScore = false; // 關閉得分機制，進入冷卻狀態
-
-        // 1.5 秒 (1500 毫秒) 後自動解鎖，並換上加油語錄
-        setTimeout(() => {
-            isReadyToScore = true; // 重新開放得分
-            let randomIndex = Math.floor(Math.random() * motivationalQuotes.length);
-            labelContainer.innerHTML = motivationalQuotes[randomIndex] + " (準備下一發！)";
-        }, 1500); 
-    }
-}
-
-function drawPose(pose) {
-    if (webcam.canvas) {
-        ctx.drawImage(webcam.canvas, 0, 0);
-        if (pose) {
-            const minPartConfidence = 0.5;
-            tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
-            tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
-        }
-    }
-}
+    // --- 🛠️ 核心改造：無限集氣跳分邏輯 ---
+    if (handupProbability >= 0.70) {
+        labelContainer.innerHTML = "⚡
